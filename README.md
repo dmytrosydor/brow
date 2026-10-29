@@ -22,7 +22,7 @@ cd app && scripts/build-app.sh && open build/brow.app
 
 Right-click the notch for the menu: hold on/off, how long to wait, launch at login, connect to all Claude sessions (adds the hooks to `~/.claude/settings.json`, keeps a backup), quit. The same from the command line: `brow --install-hooks` / `--uninstall-hooks` (`--yes` skips the dialog, `BROW_CLAUDE_SETTINGS` points at another file).
 
-This repo's `.claude/settings.json` also wires the dev build (`app/.build/release/brow-hook`) for sessions started in this folder; drop those entries once brow is connected to all sessions, or events arrive twice.
+This repo's `.claude/settings.json` holds only the spike hooks; brow itself is connected through the user settings.
 
 Session ids listed in `~/Library/Application Support/brow/skip_sessions` are never held.
 
