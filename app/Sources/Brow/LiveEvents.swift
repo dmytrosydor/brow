@@ -95,7 +95,7 @@ extension SessionStore {
     }
 
     /// Test hook, only with BROW_DEBUG: act as if the notch was clicked.
-    /// {"brow": "reply"|"answer"|"release", "session": id, "text": …, "answers": {…}}
+    /// {"brow": "reply"|"answer"|"release"|"select", "session": id, "text": …, "answers": {…}}
     private func control(_ payload: [String: Any]) {
         guard ProcessInfo.processInfo.environment["BROW_DEBUG"] != nil,
               let id = payload["session"] as? String,
@@ -104,6 +104,7 @@ extension SessionStore {
         case "reply": send(payload["text"] as? String ?? "", to: session)
         case "answer": answer(payload["answers"] as? [String: String] ?? [:], to: session)
         case "release": release(id)
+        case "select": selectedID = id
         default: break
         }
     }

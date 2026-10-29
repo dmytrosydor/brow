@@ -73,13 +73,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        place()
+        // A display was plugged in or out, or the resolution changed.
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
+        ) { [weak self] _ in self?.place() }
+    }
+
+    /// Puts the panel at the top centre of the notched screen (or the main one).
+    private func place() {
         let screen = NSScreen.screens.first { $0.safeAreaInsets.top > 0 } ?? NSScreen.main ?? NSScreen.screens[0]
         let notch = NotchGeometry(screen: screen)
-        let size = NSSize(width: 720, height: 640)
+        let size = NSSize(width: 720, height: min(900, screen.frame.height * 0.8))
         let frame = NSRect(x: screen.frame.midX - size.width / 2, y: screen.frame.maxY - size.height,
                            width: size.width, height: size.height)
 
-        let panel = NotchPanel(frame: frame)
+        let panel = self.panel ?? NotchPanel(frame: frame)
         let host = NSHostingView(rootView: NotchRoot(notch: notch).environment(store))
         host.frame = NSRect(origin: .zero, size: size)
         // The panel has a fixed frame; don't let SwiftUI resize the window on

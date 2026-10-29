@@ -87,13 +87,23 @@ struct PillButton: ButtonStyle {
     var primary = false
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(primary ? Color.black : Color.white)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(primary ? Color.browAccent : Color.white.opacity(0.12), in: Capsule())
-            .opacity(configuration.isPressed ? 0.7 : 1)
+        Pill(configuration: configuration, primary: primary)
+    }
+
+    private struct Pill: View {
+        let configuration: Configuration
+        let primary: Bool
+        @Environment(\.isEnabled) private var isEnabled
+
+        var body: some View {
+            configuration.label
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(primary ? Color.black : Color.white)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(primary ? Color.browAccent : Color.white.opacity(0.12), in: Capsule())
+                .opacity(!isEnabled ? 0.4 : configuration.isPressed ? 0.7 : 1)
+        }
     }
 }
 
@@ -148,6 +158,7 @@ struct NotchRoot: View {
         .contentShape(Rectangle())
         .onHover(perform: hover)
         .onTapGesture { if !open { store.expanded = true } }
+        .contextMenu { NotchMenu() }
         .animation(.spring(response: 0.4, dampingFraction: 0.84), value: open)
         .animation(.spring(response: 0.32, dampingFraction: 0.9), value: openHeight)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -238,6 +249,32 @@ struct NotchRoot: View {
     }
 }
 
+/// Right-click menu: settings, hook setup, quit.
+struct NotchMenu: View {
+    @Environment(SessionStore.self) private var store
+
+    var body: some View {
+        @Bindable var prefs = store.prefs
+        Toggle("Тримати сесію для відповіді з нотча", isOn: $prefs.holdReplies)
+        Picker("Чекати на відповідь", selection: $prefs.holdMinutes) {
+            ForEach([5, 10, 20, 30], id: \.self) { Text("\($0) хв").tag($0) }
+        }
+        Divider()
+        if prefs.isAppBundle {
+            Toggle("Запускати під час входу", isOn: Binding(get: { prefs.launchAtLogin }, set: { prefs.launchAtLogin = $0 }))
+        }
+        if HookInstaller.isInstalled() {
+            Button("Відключити від усіх сесій Claude…") { HookInstaller.uninstall() }
+        } else {
+            Button("Підключити до всіх сесій Claude…") { HookInstaller.install() }
+        }
+        Divider()
+        Button("Вийти з brow") {
+            NSApp.terminate(nil)
+        }
+    }
+}
+
 struct SessionList: View {
     @Environment(SessionStore.self) private var store
 
@@ -293,7 +330,7 @@ struct SessionRow: View {
                         .font(.system(size: 11))
                         .foregroundStyle(Color.dim)
                 }
-                Text(session.lastMessage)
+                Text(session.questions.first?.text ?? session.lastMessage)
                     .font(.system(size: 12))
                     .foregroundStyle(Color.white.opacity(0.7))
                     .lineLimit(1)
@@ -341,7 +378,9 @@ struct SessionDetail: View {
             }
             .foregroundStyle(.white)
 
-            message
+            if session.lastMessage != SessionStore.newSessionText {
+                message
+            }
 
             let canReply = store.canReply(session)
             if !session.questions.isEmpty {
