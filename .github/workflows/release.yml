@@ -1,0 +1,27 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build brow.app
+        working-directory: app
+        run: scripts/build-app.sh "${GITHUB_REF_NAME#v}"
+      - name: Zip
+        working-directory: app/build
+        run: ditto -c -k --keepParent brow.app "brow-${GITHUB_REF_NAME}.zip"
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: app/build/brow-${{ github.ref_name }}.zip
+          body: |
+            Unzip into /Applications, then run once:
+            `xattr -dr com.apple.quarantine /Applications/brow.app`
+            (the app is not notarized). See CHANGELOG.md for what changed.

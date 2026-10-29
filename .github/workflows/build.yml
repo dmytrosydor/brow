@@ -1,0 +1,20 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build brow.app
+        working-directory: app
+        run: scripts/build-app.sh
+      - name: Hook stays silent without brow
+        working-directory: app
+        run: |
+          out=$(printf '%s' '{"session_id":"ci","hook_event_name":"Stop"}' | build/brow.app/Contents/MacOS/brow-hook)
+          test -z "$out"
