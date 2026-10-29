@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<title>brow</title>
+<style>
+  @page { size: A4; margin: 0; }
+  :root {
+    --ink: #16130f;
+    --muted: #6b645c;
+    --line: #e7e1d8;
+    --paper: #fbf8f3;
+    --accent: #d97857;
+    --green: #5bd187;
+    --blue: #66a1ff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--paper); color: var(--ink);
+    font-family: -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .page { width: 210mm; height: 297mm; padding: 18mm 18mm 16mm; position: relative; overflow: hidden;
+    page-break-after: always; display: flex; flex-direction: column; }
+  .page:last-child { page-break-after: auto; }
+  h1 { font-size: 30pt; letter-spacing: -0.02em; margin: 0 0 6mm; }
+  h2 { font-size: 13pt; margin: 7mm 0 3mm; }
+  p, li { font-size: 10.5pt; line-height: 1.5; }
+  p { margin: 0 0 3mm; }
+  .kicker { font-size: 9pt; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin-bottom: 3mm; }
+  .lead { font-size: 13pt; line-height: 1.45; color: #2c2722; max-width: 150mm; }
+  .muted { color: var(--muted); }
+  .foot { position: absolute; left: 18mm; right: 18mm; bottom: 9mm; display: flex; justify-content: space-between;
+    font-size: 8pt; color: var(--muted); }
+
+  /* Desk scene: a MacBook screen top with the notch */
+  .screen { border-radius: 14px; overflow: hidden; position: relative;
+    background: radial-gradient(120% 90% at 20% 10%, #f3b48d 0%, #c7695a 38%, #4b2d4f 72%, #1d1a2b 100%); }
+  .menubar { height: 19px; background: rgba(20, 16, 24, 0.28); backdrop-filter: blur(8px);
+    display: flex; align-items: center; justify-content: space-between; padding: 0 12px;
+    font-size: 7.5pt; color: rgba(255, 255, 255, 0.92); font-weight: 500; }
+  .menubar .l span, .menubar .r span { margin-right: 11px; }
+  .menubar .l b { margin-right: 11px; }
+  .notch-img { position: absolute; top: 0; left: 50%; transform: translateX(-50%); display: block; }
+
+  /* Cover */
+  .cover { background: #121014; color: #f6f1ea; }
+  .cover .kicker { color: var(--accent); }
+  .cover .lead { color: #d8d0c6; }
+  .wordmark { display: flex; align-items: center; gap: 5mm; margin: 12mm 0 4mm; }
+  .wordmark span { font-size: 64pt; font-weight: 800; letter-spacing: -0.04em; }
+  .cover .screen { margin-top: 12mm; height: 112mm; }
+  .cover .foot { color: #8f877d; }
+
+  .features { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm 8mm; margin-top: 4mm; }
+  .feature { border-top: 2px solid var(--ink); padding-top: 3mm; }
+  .feature b { display: block; font-size: 11pt; margin-bottom: 1.5mm; }
+  .feature p { font-size: 9.5pt; color: #3d3730; margin: 0; }
+
+  .shots { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm 6mm; }
+  .shot { display: flex; flex-direction: column; }
+  .panel { border-radius: 12px; padding: 0 0 2mm; background: linear-gradient(160deg, #3a2a3c, #1b1824); }
+  .panel img { width: 100%; display: block; }
+  .cap { margin-top: 2.5mm; font-size: 9.5pt; line-height: 1.4; }
+  .cap b { display: block; font-size: 10.5pt; }
+  .shot .cap { margin-top: 2.5mm; font-size: 9.5pt; line-height: 1.4; }
+  .shot .cap b { display: block; font-size: 10.5pt; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+  th, td { text-align: left; padding: 2.2mm 2mm; border-bottom: 1px solid var(--line); vertical-align: top; line-height: 1.4; }
+  th { font-size: 8pt; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 700; }
+  code { font-family: "SF Mono", Menlo, monospace; font-size: 8.6pt; background: #efe9e0; padding: 0.3mm 1.2mm; border-radius: 3px; }
+  .ok { color: #2f9e5f; font-weight: 700; }
+
+  .states { display: flex; gap: 6mm; margin: 2mm 0 0; }
+  .state { flex: 1; border: 1px solid var(--line); border-radius: 10px; padding: 3mm 3.5mm; font-size: 9.5pt; line-height: 1.4; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
+
+  .steps { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2mm; margin-top: 2mm; }
+  .step { border-radius: 8px; padding: 2.5mm; background: #f1ebe2; font-size: 8.4pt; line-height: 1.35; min-height: 30mm; }
+  .step b { display: block; font-size: 10pt; margin-bottom: 1mm; }
+  .step.done { background: var(--ink); color: #f6f1ea; }
+  .step.now { background: var(--accent); color: #1b120d; }
+  ul { margin: 0; padding-left: 5mm; }
+  li { margin-bottom: 1.2mm; font-size: 10pt; }
+</style>
+</head>
+<body>
+
+<!-- 1. Cover -->
+<section class="page cover">
+  <div class="kicker">Проєкт · концепт і прототип</div>
+  <div class="wordmark">
+    <svg width="72" height="72" viewBox="0 0 100 100">
+      <path d="M10 40 Q38 -4 92 22" fill="none" stroke="#d97857" stroke-width="15" stroke-linecap="round"/>
+      <circle cx="50" cy="70" r="15" fill="none" stroke="#fff" stroke-width="10"/>
+      <circle cx="50" cy="70" r="6" fill="#fff"/>
+    </svg>
+    <span>brow</span>
+  </div>
+  <p class="lead">Сесії Claude — прямо в нотчі MacBook. Видно, хто з них закінчив, хто питає, і можна відповісти, не відкриваючи вікно.</p>
+
+  <div class="screen">
+    <div class="menubar">
+      <div class="l"><b></b><b>Ghostty</b><span>Shell</span><span>Edit</span><span>View</span><span>Window</span></div>
+      <div class="r"><span>⌁</span><span>􀙇</span><span>Чт 29 жовт. 23:10</span></div>
+    </div>
+    <img class="notch-img" src="img/list.png" style="width: 640px">
+  </div>
+
+  <div class="foot"><span>Дмитро Сидор</span><span>жовтень 2026</span></div>
+</section>
+
+<!-- 2. What and why -->
+<section class="page">
+  <div class="kicker">Навіщо</div>
+  <h1>Коли сесій кілька, легко пропустити ту, що чекає</h1>
+  <p class="lead">Я тримаю одночасно кілька сесій Claude: у програмі Claude і в терміналі. Одна закінчила і пропонує команду, друга питає, як робити далі, третя ще працює. Щоб це побачити, треба по черзі перемикатися між вікнами.</p>
+  <p class="lead">brow ставить усе це в одне місце, яке завжди перед очима, — у нотч над екраном. Нотч сам каже, скільки сесій чекають, а розгорнувши його, можна одразу відповісти.</p>
+
+  <h2>Що вміє</h2>
+  <div class="features">
+    <div class="feature"><b>Видно всі сесії</b><p>Проєкт, назва, стан і час. Програма Claude і термінал в одному списку.</p></div>
+    <div class="feature"><b>Останнє повідомлення</b><p>Перший рядок у списку, повний текст — по кліку.</p></div>
+    <div class="feature"><b>Відповісти текстом</b><p>Пишеш у нотчі, Claude отримує це як звичайну відповідь і працює далі.</p></div>
+    <div class="feature"><b>Натиснути кнопку</b><p>Кнопки, які Claude пропонує наприкінці відповіді, доступні прямо в нотчі.</p></div>
+    <div class="feature"><b>Вибрати варіант</b><p>Питання з варіантами: клік на варіант або своя відповідь.</p></div>
+    <div class="feature"><b>Запустити команду</b><p>Команда з повідомлення відкривається в новому вікні Ghostty. Тільки після натискання.</p></div>
+  </div>
+
+  <h2>Чого brow не робить</h2>
+  <ul>
+    <li>Нічого не шле в інтернет: повідомлення лишаються на Mac.</li>
+    <li>Не запускає команди сам — тільки після кліку.</li>
+    <li>Не замінює програму Claude: це швидкий погляд і швидка відповідь.</li>
+  </ul>
+  <div class="foot"><span>brow</span><span>2</span></div>
+</section>
+
+<!-- 3. How it looks -->
+<section class="page">
+  <div class="kicker">Як виглядає</div>
+  <h1>Нотч згорнутий і розгорнутий</h1>
+  <div class="screen" style="height: 34mm">
+    <div class="menubar"><div class="l"><b></b><b>Claude</b><span>File</span><span>Edit</span><span>View</span><span>Window</span></div><div class="r"><span>Чт 29 жовт. 23:10</span></div></div>
+    <img class="notch-img" src="img/collapsed.png" style="width: 200px">
+  </div>
+  <div class="cap"><b>1. Згорнутий</b>Чорний виступ навколо нотча. Зліва значок brow, справа — скільки сесій чекають на тебе. Нічого не заважає, поки нічого не сталося.</div>
+  <div class="screen" style="height: 128mm; margin-top: 8mm">
+    <div class="menubar"><div class="l"><b></b><b>Claude</b><span>File</span><span>Edit</span></div><div class="r"><span>23:10</span></div></div>
+    <img class="notch-img" src="img/list.png" style="width: 560px">
+  </div>
+  <div class="cap"><b>2. Список</b>Навів мишку — нотч розгортається. Крапка показує стан, мітка — що можна зробити: «Питання», «Кнопки», «Команда». Клік — і відкривається сесія.</div>
+  <div class="foot"><span>brow</span><span>3</span></div>
+</section>
+
+<section class="page">
+  <div class="kicker">Як виглядає</div>
+  <h1>Що можна зробити з нотча</h1>
+  <div class="shots">
+    <div class="shot"><div class="panel"><img src="img/question.png"></div>
+      <div class="cap"><b>3. Питання</b>Claude питає з варіантами. Клік на варіант або своя відповідь у полі.</div></div>
+    <div class="shot"><div class="panel"><img src="img/buttons.png"></div>
+      <div class="cap"><b>4. Кнопки</b>Кнопки з кінця відповіді. Перша — рекомендована.</div></div>
+    <div class="shot"><div class="panel"><img src="img/command.png"></div>
+      <div class="cap"><b>5. Команда</b>Команду з повідомлення можна запустити в Ghostty або скопіювати.</div></div>
+    <div class="shot"><div class="panel"><img src="img/sent.png"></div>
+      <div class="cap"><b>6. Відправлено</b>Після відповіді сесія знову «працює», внизу коротке підтвердження.</div></div>
+  </div>
+  <div class="foot"><span>brow</span><span>4</span></div>
+</section>
+
+<!-- 4. How it works -->
+<section class="page">
+  <div class="kicker">Як працює</div>
+  <h1>Від Claude до нотча і назад</h1>
+  <p class="lead">Claude Code вміє запускати невеликі програми на певних подіях — це «хуки». brow ставить один такий хук, і той передає події в нотч.</p>
+
+  <svg viewBox="0 0 640 230" width="100%" style="margin: 4mm 0 2mm">
+    <defs>
+      <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#16130f"/></marker>
+      <marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#d97857"/></marker>
+    </defs>
+    <g font-family="-apple-system, sans-serif" font-size="12">
+      <rect x="4" y="40" width="140" height="78" rx="12" fill="#fff" stroke="#16130f" stroke-width="1.5"/>
+      <text x="74" y="70" text-anchor="middle" font-weight="700" font-size="14">Claude</text>
+      <text x="74" y="90" text-anchor="middle" fill="#6b645c">програма або</text>
+      <text x="74" y="106" text-anchor="middle" fill="#6b645c">термінал</text>
+
+      <rect x="250" y="40" width="140" height="78" rx="12" fill="#fff" stroke="#16130f" stroke-width="1.5"/>
+      <text x="320" y="72" text-anchor="middle" font-weight="700" font-size="14">brow-hook</text>
+      <text x="320" y="92" text-anchor="middle" fill="#6b645c">маленька програма</text>
+      <text x="320" y="107" text-anchor="middle" fill="#6b645c">всередині brow</text>
+
+      <rect x="496" y="40" width="140" height="78" rx="12" fill="#16130f"/>
+      <text x="566" y="72" text-anchor="middle" font-weight="700" font-size="14" fill="#fff">brow</text>
+      <text x="566" y="92" text-anchor="middle" fill="#cfc7bc">нотч на екрані</text>
+      <text x="566" y="107" text-anchor="middle" fill="#cfc7bc">SwiftUI</text>
+
+      <line x1="146" y1="66" x2="246" y2="66" stroke="#16130f" stroke-width="1.5" marker-end="url(#a)"/>
+      <text x="196" y="58" text-anchor="middle">подія</text>
+      <line x1="392" y1="66" x2="492" y2="66" stroke="#16130f" stroke-width="1.5" marker-end="url(#a)"/>
+      <text x="442" y="58" text-anchor="middle">через сокет</text>
+
+      <line x1="496" y1="100" x2="394" y2="100" stroke="#d97857" stroke-width="1.8" marker-end="url(#b)"/>
+      <line x1="250" y1="100" x2="148" y2="100" stroke="#d97857" stroke-width="1.8" marker-end="url(#b)"/>
+      <text x="442" y="90" text-anchor="middle" fill="#d97857" font-weight="600">відповідь</text>
+      <text x="196" y="90" text-anchor="middle" fill="#d97857" font-weight="600">відповідь</text>
+      <text x="74" y="138" text-anchor="middle" fill="#d97857" font-weight="600">працює далі</text>
+
+      <text x="4" y="160" font-weight="700">Ти</text>
+      <text x="4" y="180" fill="#6b645c">дивишся в нотч, клікаєш варіант, кнопку чи пишеш текст.</text>
+      <text x="4" y="200" fill="#6b645c">brow віддає це хуку, а хук — Claude. Якщо brow не запущений, хук одразу виходить</text>
+      <text x="4" y="220" fill="#6b645c">і Claude працює як завжди.</text>
+    </g>
+  </svg>
+
+  <h2>Які події слухає</h2>
+  <table>
+    <tr><th>Подія</th><th>Що з нею робить brow</th></tr>
+    <tr><td><code>SessionStart</code> / <code>SessionEnd</code></td><td>додає або прибирає сесію зі списку</td></tr>
+    <tr><td><code>UserPromptSubmit</code></td><td>сесія знову працює, старі кнопки зникають</td></tr>
+    <tr><td><code>Stop</code></td><td>Claude закінчив: показати повідомлення, дати відповісти текстом чи кнопкою</td></tr>
+    <tr><td><code>PreToolUse</code> (wrap_up)</td><td>забирає кнопки, які програма Claude малює внизу відповіді</td></tr>
+    <tr><td><code>PermissionRequest</code> (питання)</td><td>показує питання з варіантами і повертає вибір</td></tr>
+    <tr><td><code>PostToolUse</code> (питання)</td><td>на питання вже відповіли в програмі — прибрати з нотча</td></tr>
+  </table>
+
+  <h2>Стани сесії</h2>
+  <div class="states">
+    <div class="state"><span class="dot" style="background: var(--blue)"></span><b>Працює</b><br>Claude ще думає або виконує команди. Крапка пульсує.</div>
+    <div class="state"><span class="dot" style="background: var(--accent)"></span><b>Чекає на тебе</b><br>Є питання, кнопки або Claude просто закінчив і чекає відповіді.</div>
+    <div class="state"><span class="dot" style="background: var(--green)"></span><b>Готово</b><br>Закінчив і нічого не питає. Можна глянути, що зроблено.</div>
+  </div>
+
+  <h2>Коли тримати сесію</h2>
+  <p>Щоб відповідь з нотча дійшла, хук має «притримати» Claude, поки ти відповідаєш. brow робить це, тільки коли вікна цієї сесії не видно, і відпускає, щойно ти повертаєшся в програму. Межа очікування — 10 хвилин.</p>
+  <div class="foot"><span>brow</span><span>5</span></div>
+</section>
+
+<!-- 5. Status and plan -->
+<section class="page">
+  <div class="kicker">Де ми зараз</div>
+  <h1>Перевірено, план, ризики</h1>
+
+  <h2>Що вже перевірено в програмі Claude</h2>
+  <table>
+    <tr><th>Питання</th><th>Результат</th></tr>
+    <tr><td>Чи бачить хук, що Claude написав наприкінці?</td><td><span class="ok">Так.</span> Stop-хук отримує останнє повідомлення повністю.</td></tr>
+    <tr><td>Чи можна відповісти Claude ззовні?</td><td><span class="ok">Так.</span> Хук чекає і повертає текст, Claude працює з ним далі.</td></tr>
+    <tr><td>Чи видно кнопки і питання?</td><td><span class="ok">Так.</span> Хуки бачать і текст питання, і всі варіанти та кнопки.</td></tr>
+    <tr><td>Чи можна вибрати варіант з нотча?</td><td><span class="ok">Так.</span> І варіант зі списку, і свій текст.</td></tr>
+    <tr><td>Що, як відповів у програмі раніше?</td><td><span class="ok">Безпечно.</span> Виграє перша відповідь, друга ігнорується.</td></tr>
+  </table>
+
+  <h2>Етапи</h2>
+  <div class="steps">
+    <div class="step done"><b>M0</b>Перевірка хуків</div>
+    <div class="step done"><b>M1</b>Прототип нотча на демо-даних</div>
+    <div class="step now"><b>M2</b>Живі сесії: хук + сокет</div>
+    <div class="step"><b>M3</b>Відповідь текстом і кнопками</div>
+    <div class="step"><b>M4</b>Питання з варіантами</div>
+    <div class="step"><b>M5</b>Команди в Ghostty</div>
+    <div class="step"><b>M6</b>Налаштування, автозапуск, підпис</div>
+  </div>
+
+  <h2>Ризики й відкриті питання</h2>
+  <ul>
+    <li>Поки хук тримає сесію, програма Claude показує її як «працює» і не малює свої кнопки.</li>
+    <li>Після відповіді з нотча старі кнопки в програмі однаково з'являються — можна відповісти двічі.</li>
+    <li>Ще не перевірено, що буде, якщо писати в програмі, поки хук тримає сесію.</li>
+    <li>Як по кліку відкрити саме цю сесію в програмі Claude.</li>
+    <li>Mac без нотча: така сама «пігулка» зверху по центру.</li>
+  </ul>
+
+  <h2>Технічно</h2>
+  <ul>
+    <li>macOS 14+, Swift і SwiftUI, панель поверх меню без фокусу.</li>
+    <li>Хуки ставляться один раз у <code>~/.claude/settings.json</code>, на всі проєкти.</li>
+    <li>Зв'язок хука з нотчем — Unix-сокет у <code>~/Library/Application Support/brow/</code>.</li>
+    <li>Команди — у новому вікні Ghostty, у теці сесії.</li>
+  </ul>
+  <div class="foot"><span>brow</span><span>6</span></div>
+</section>
+
+</body>
+</html>

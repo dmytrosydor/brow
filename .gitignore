@@ -7,3 +7,4 @@ spike/skip_sessions
 spike/ask_hold
 spike/answers.json
 spike/ask_waiting.json
+app/.build/
