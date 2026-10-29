@@ -322,7 +322,7 @@ struct SessionDetail: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(Color.dim)
                 Spacer()
-                Button { store.showToast("Відкриваю «\(session.project)» у \(session.client.name)") } label: {
+                Button { store.open(session) } label: {
                     Label("Відкрити", systemImage: "arrow.up.forward.app")
                 }
                 .buttonStyle(.plain)
@@ -343,31 +343,38 @@ struct SessionDetail: View {
 
             message
 
-            if let question = session.question {
-                QuestionCard(session: session, question: question)
-            } else if let wrapUp = session.wrapUp {
+            let canReply = store.canReply(session)
+            if !session.questions.isEmpty {
+                QuestionCard(session: session, questions: session.questions, enabled: canReply)
+            } else if let wrapUp = session.wrapUp, canReply {
                 WrapUpCard(session: session, wrapUp: wrapUp)
             }
             if let command = session.command {
                 CommandCard(session: session, command: command)
             }
 
-            HStack(spacing: 8) {
-                TextField(session.question == nil ? "Написати Claude…" : "Своя відповідь…", text: $draft)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 13))
-                    .foregroundStyle(.white)
-                    .onSubmit(send)
-                Button(action: send) {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 20))
-                        .foregroundStyle(draft.isEmpty ? Color.dim : Color.browAccent)
+            if canReply {
+                HStack(spacing: 8) {
+                    TextField(session.questions.isEmpty ? "Написати Claude…" : "Своя відповідь…", text: $draft)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 13))
+                        .foregroundStyle(.white)
+                        .onSubmit(send)
+                    Button(action: send) {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 20))
+                            .foregroundStyle(draft.isEmpty ? Color.dim : Color.browAccent)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.faint, in: RoundedRectangle(cornerRadius: 12))
+            } else if session.state != .working {
+                Text("Сесія не чекає на відповідь з нотча. Відповісти можна в \(session.client == .desktop ? "програмі Claude" : "терміналі").")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.dim)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color.faint, in: RoundedRectangle(cornerRadius: 12))
         }
         .padding(.horizontal, 10)
     }
@@ -401,36 +408,78 @@ struct SessionDetail: View {
 
 struct QuestionCard: View {
     var session: Session
-    var question: Question
+    var questions: [Question]
+    var enabled: Bool
     @Environment(SessionStore.self) private var store
+    /// Picked labels per question, used when there is more than one question
+    /// or several answers are allowed; a single plain question sends on click.
+    @State private var picked: [String: Set<String>] = [:]
+
+    private var sendsOnClick: Bool { questions.count == 1 && !questions[0].multiSelect }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Text(question.header.uppercased())
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(Color.browAccent)
-                Text(question.text)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white)
-            }
-            ForEach(question.options, id: \.self) { option in
-                Button { store.send(option.label, to: session) } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(option.label).font(.system(size: 13, weight: .semibold)).foregroundStyle(.white)
-                            Text(option.detail).font(.system(size: 11)).foregroundStyle(Color.dim)
-                        }
-                        Spacer()
-                        Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(Color.dim)
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(questions, id: \.self) { question in
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 6) {
+                        Text(question.header.uppercased())
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(Color.browAccent)
+                        Text(question.text)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.white)
                     }
-                    .padding(10)
-                    .background(Color.white.opacity(0.09), in: RoundedRectangle(cornerRadius: 10))
-                    .contentShape(Rectangle())
+                    ForEach(question.options, id: \.self) { option in
+                        optionButton(question, option)
+                    }
                 }
-                .buttonStyle(.plain)
+            }
+            if enabled && !sendsOnClick {
+                Button("Відправити") { submit() }
+                    .buttonStyle(PillButton(primary: true))
+                    .disabled(questions.contains { picked[$0.text, default: []].isEmpty })
             }
         }
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.55)
+    }
+
+    private func optionButton(_ question: Question, _ option: QuestionOption) -> some View {
+        let isPicked = picked[question.text, default: []].contains(option.label)
+        return Button {
+            if sendsOnClick {
+                store.answer([question.text: option.label], to: session)
+            } else if question.multiSelect {
+                picked[question.text, default: []].formSymmetricDifference([option.label])
+            } else {
+                picked[question.text] = [option.label]
+            }
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(option.label).font(.system(size: 13, weight: .semibold)).foregroundStyle(.white)
+                    if !option.detail.isEmpty {
+                        Text(option.detail).font(.system(size: 11)).foregroundStyle(Color.dim)
+                    }
+                }
+                Spacer()
+                Image(systemName: sendsOnClick ? "chevron.right" : (isPicked ? "checkmark.circle.fill" : "circle"))
+                    .font(.system(size: 12))
+                    .foregroundStyle(isPicked ? Color.browAccent : Color.dim)
+            }
+            .padding(10)
+            .background(Color.white.opacity(isPicked ? 0.16 : 0.09), in: RoundedRectangle(cornerRadius: 10))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func submit() {
+        let answers = questions.reduce(into: [String: String]()) { result, question in
+            let chosen = picked[question.text, default: []]
+            result[question.text] = question.options.map(\.label).filter(chosen.contains).joined(separator: ", ")
+        }
+        store.answer(answers, to: session)
     }
 }
 
@@ -446,7 +495,7 @@ struct WrapUpCard: View {
             }
             HStack(spacing: 8) {
                 ForEach(Array(wrapUp.actions.enumerated()), id: \.element) { index, action in
-                    Button(action.label) { store.send(action.label, to: session) }
+                    Button(action.label) { store.send(action.message, to: session) }
                         .buttonStyle(PillButton(primary: index == 0))
                 }
             }

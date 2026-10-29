@@ -1,18 +1,33 @@
 import Foundation
 
-/// Turns hook events forwarded by brow-hook into session state.
+/// Turns hook events forwarded by brow-hook into session state, and decides
+/// which hook calls to hold for a reply.
 /// Payload: {"event": <hook input>, "env": {CLAUDE_CODE_ENTRYPOINT, ...}}.
 extension SessionStore {
-    func apply(_ payload: [String: Any]) {
+    func apply(_ payload: [String: Any], responder: Responder) {
+        if payload["brow"] != nil {
+            control(payload)
+            responder.release()
+            return
+        }
         guard let event = payload["event"] as? [String: Any],
               let id = event["session_id"] as? String,
-              let name = event["hook_event_name"] as? String else { return }
-        let env = payload["env"] as? [String: String] ?? [:]
-        if ProcessInfo.processInfo.environment["BROW_DEBUG"] != nil {
-            FileHandle.standardError.write(Data("event \(name) \(event["tool_name"] ?? "") \(id)\n".utf8))
+              let name = event["hook_event_name"] as? String else {
+            responder.release()
+            return
         }
+        let env = payload["env"] as? [String: String] ?? [:]
+        let tool = event["tool_name"] as? String
+        let input = event["tool_input"] as? [String: Any] ?? [:]
+        if ProcessInfo.processInfo.environment["BROW_DEBUG"] != nil {
+            FileHandle.standardError.write(Data("event \(name) \(tool ?? "") \(id)\n".utf8))
+        }
+        // Whatever is not held below is let go right away.
+        var held = false
+        defer { if !held { responder.release() } }
 
         if name == "SessionEnd" {
+            release(id)
             sessions.removeAll { $0.id == id }
             if selectedID == id { selectedID = nil }
             return
@@ -20,16 +35,17 @@ extension SessionStore {
 
         var session = sessions.first { $0.id == id } ?? newSession(id: id, event: event, env: env)
         session.updated = .now
-        let tool = event["tool_name"] as? String
-        let input = event["tool_input"] as? [String: Any] ?? [:]
+        let mayHold = prefs.holdReplies && !prefs.skippedSessions.contains(id)
 
         switch (name, tool) {
         case ("SessionStart", _):
             break
         case ("UserPromptSubmit", _):
+            // The user wrote in the app or terminal: nothing to answer from the notch.
+            release(id)
             session.state = .working
             session.wrapUp = nil
-            session.question = nil
+            session.questions = []
             session.command = nil
             if session.title.isEmpty, let prompt = event["prompt"] as? String {
                 session.title = Self.title(from: prompt)
@@ -37,11 +53,20 @@ extension SessionStore {
             if session.lastMessage == Self.newSessionText { session.lastMessage = "Працює…" }
         case ("PreToolUse", "mcp__ccd_turn__wrap_up"):
             session.wrapUp = Self.wrapUp(from: input)
-        case ("PreToolUse", "AskUserQuestion"), ("PermissionRequest", "AskUserQuestion"):
-            session.question = Self.question(from: input)
+        case ("PreToolUse", "AskUserQuestion"):
+            session.questions = Self.questions(from: input)
             session.state = .waiting
+        case ("PermissionRequest", "AskUserQuestion"):
+            session.questions = Self.questions(from: input)
+            session.state = .waiting
+            if mayHold {
+                hold(.question, session: id, responder: responder, toolInput: input)
+                held = true
+            }
         case ("PostToolUse", "AskUserQuestion"):
-            session.question = nil
+            // Answered in the app, or by us: drop the question from the notch.
+            release(id, only: .question)
+            session.questions = []
             session.state = .working
         case ("Notification", _):
             session.state = .waiting
@@ -51,8 +76,12 @@ extension SessionStore {
                 session.lastMessage = message
                 session.command = Self.command(in: message)
             }
-            let asks = session.question != nil || session.wrapUp?.ask != nil
+            let asks = !session.questions.isEmpty || session.wrapUp?.ask != nil
             session.state = asks ? .waiting : .done
+            if mayHold && !isFrontmost(session) {
+                hold(.stop, session: id, responder: responder)
+                held = true
+            }
         default:
             return
         }
@@ -65,6 +94,20 @@ extension SessionStore {
         sessions.sort { $0.updated > $1.updated }
     }
 
+    /// Test hook, only with BROW_DEBUG: act as if the notch was clicked.
+    /// {"brow": "reply"|"answer"|"release", "session": id, "text": …, "answers": {…}}
+    private func control(_ payload: [String: Any]) {
+        guard ProcessInfo.processInfo.environment["BROW_DEBUG"] != nil,
+              let id = payload["session"] as? String,
+              let session = sessions.first(where: { $0.id == id }) else { return }
+        switch payload["brow"] as? String {
+        case "reply": send(payload["text"] as? String ?? "", to: session)
+        case "answer": answer(payload["answers"] as? [String: String] ?? [:], to: session)
+        case "release": release(id)
+        default: break
+        }
+    }
+
     private func newSession(id: String, event: [String: Any], env: [String: String]) -> Session {
         let cwd = event["cwd"] as? String
         return Session(
@@ -75,7 +118,8 @@ extension SessionStore {
             state: .done,
             updated: .now,
             lastMessage: Self.newSessionText,
-            cwd: cwd
+            cwd: cwd,
+            termProgram: env["TERM_PROGRAM"]
         )
     }
 
@@ -87,6 +131,7 @@ extension SessionStore {
     }
 
     static func wrapUp(from input: [String: Any]) -> WrapUp {
+        // Buttons with "action" are app actions (commit, PR…), only the app can run them.
         let actions = (input["actions"] as? [[String: Any]] ?? []).compactMap { action -> WrapAction? in
             guard let label = action["label"] as? String, action["action"] == nil else { return nil }
             return WrapAction(label: label, message: action["message"] as? String ?? label)
@@ -94,13 +139,15 @@ extension SessionStore {
         return WrapUp(recap: input["recap"] as? String ?? "", ask: input["ask"] as? String, actions: actions)
     }
 
-    static func question(from input: [String: Any]) -> Question? {
-        guard let first = (input["questions"] as? [[String: Any]])?.first else { return nil }
-        let options = (first["options"] as? [[String: Any]] ?? []).compactMap { option -> QuestionOption? in
-            guard let label = option["label"] as? String else { return nil }
-            return QuestionOption(label: label, detail: option["description"] as? String ?? "")
+    static func questions(from input: [String: Any]) -> [Question] {
+        (input["questions"] as? [[String: Any]] ?? []).map { item in
+            let options = (item["options"] as? [[String: Any]] ?? []).compactMap { option -> QuestionOption? in
+                guard let label = option["label"] as? String else { return nil }
+                return QuestionOption(label: label, detail: option["description"] as? String ?? "")
+            }
+            return Question(header: item["header"] as? String ?? "", text: item["question"] as? String ?? "",
+                            options: options, multiSelect: item["multiSelect"] as? Bool ?? false)
         }
-        return Question(header: first["header"] as? String ?? "", text: first["question"] as? String ?? "", options: options)
     }
 
     /// First shell code block in the message, the command the notch offers to run.

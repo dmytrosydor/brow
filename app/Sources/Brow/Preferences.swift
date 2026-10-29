@@ -1,0 +1,48 @@
+import BrowShared
+import Foundation
+import Observation
+import ServiceManagement
+
+/// User settings, kept in UserDefaults.
+@Observable
+final class Preferences {
+    private let defaults = UserDefaults.standard
+
+    /// Hold a session after Claude stops (when its window is not in front), so
+    /// a reply from the notch can reach it.
+    var holdReplies: Bool {
+        didSet { defaults.set(holdReplies, forKey: "holdReplies") }
+    }
+
+    /// How long to hold before letting the session go without a reply.
+    var holdMinutes: Int {
+        didSet { defaults.set(holdMinutes, forKey: "holdMinutes") }
+    }
+
+    init() {
+        holdReplies = defaults.object(forKey: "holdReplies") as? Bool ?? true
+        holdMinutes = defaults.object(forKey: "holdMinutes") as? Int ?? 10
+    }
+
+    /// Session ids (one per line) brow must never hold, e.g. a session that is
+    /// working on brow itself.
+    var skippedSessions: Set<String> {
+        let url = BrowSocket.directory.appendingPathComponent("skip_sessions")
+        let text = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        return Set(text.split(whereSeparator: \.isWhitespace).map(String.init))
+    }
+
+    /// Start at login; works only when running from brow.app.
+    var launchAtLogin: Bool {
+        get { SMAppService.mainApp.status == .enabled }
+        set {
+            do {
+                if newValue { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
+            } catch {
+                NSLog("brow: launch at login: \(error)")
+            }
+        }
+    }
+
+    var isAppBundle: Bool { Bundle.main.bundleURL.pathExtension == "app" }
+}

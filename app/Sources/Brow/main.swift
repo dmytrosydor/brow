@@ -1,7 +1,10 @@
 import AppKit
 
-// Prototype entry point. `--state <collapsed|list|question|command|buttons>`
-// opens the notch in that state (used for screenshots).
+// brow: Claude sessions in the notch. See README for flags.
+
+// A hook may hang up before brow answers; that must not kill brow.
+signal(SIGPIPE, SIG_IGN)
+
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate

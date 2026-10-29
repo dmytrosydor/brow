@@ -1,3 +1,5 @@
+import AppKit
+import BrowShared
 import Foundation
 import Observation
 
@@ -17,11 +19,12 @@ struct QuestionOption: Hashable {
     var detail: String
 }
 
-/// AskUserQuestion as seen by the PermissionRequest hook.
-struct Question {
+/// One AskUserQuestion question as seen by the PermissionRequest hook.
+struct Question: Hashable {
     var header: String
     var text: String
     var options: [QuestionOption]
+    var multiSelect = false
 }
 
 /// One button of the desktop app's wrap_up box.
@@ -46,15 +49,47 @@ struct Session: Identifiable {
     var lastMessage: String
     var command: String?
     var wrapUp: WrapUp?
-    var question: Question?
+    var questions: [Question] = []
     var cwd: String?
+    /// TERM_PROGRAM of a terminal session, to know which app shows it.
+    var termProgram: String?
 
     /// What the notch can do for this session, shown as a tag in the list.
     var tag: String? {
-        if question != nil { return "Питання" }
+        if !questions.isEmpty { return "Питання" }
         if wrapUp?.actions.isEmpty == false { return "Кнопки" }
         if command != nil { return "Команда" }
         return nil
+    }
+
+    /// Bundle id of the app this session lives in, when known.
+    var appBundleID: String? {
+        if client == .desktop { return "com.anthropic.claudefordesktop" }
+        switch termProgram {
+        case "ghostty": return "com.mitchellh.ghostty"
+        case "Apple_Terminal": return "com.apple.Terminal"
+        case "iTerm.app": return "com.googlecode.iterm2"
+        case "vscode": return "com.microsoft.VSCode"
+        case "WarpTerminal": return "dev.warp.Warp-Stable"
+        default: return nil
+        }
+    }
+}
+
+/// A hook call brow is holding open so a reply from the notch can reach Claude.
+final class Hold {
+    enum Kind { case stop, question }
+
+    let kind: Kind
+    let responder: Responder
+    /// AskUserQuestion's tool_input, sent back with the answers.
+    let toolInput: [String: Any]
+    var timeout: DispatchWorkItem?
+
+    init(kind: Kind, responder: Responder, toolInput: [String: Any] = [:]) {
+        self.kind = kind
+        self.responder = responder
+        self.toolInput = toolInput
     }
 }
 
@@ -64,9 +99,13 @@ final class SessionStore {
     var expanded = false
     var selectedID: Session.ID?
     var toast: String?
-    /// Set when the prototype is launched straight into a state, so it stays
-    /// open for a screenshot until the mouse visits it.
+    /// Set when launched straight into a state, so the notch stays open for a
+    /// screenshot until the mouse visits it.
     var pinned = false
+    /// Demo data: replies only change the picture, nothing is sent.
+    var demo = false
+    let prefs = Preferences()
+    var holds: [String: Hold] = [:]
 
     init(sessions: [Session]) {
         self.sessions = sessions
@@ -79,21 +118,119 @@ final class SessionStore {
         selectedID = session?.id
     }
 
-    /// Stand-in for handing the reply to the waiting hook: the session goes back to work.
-    func send(_ text: String, to session: Session, note: String? = nil) {
+    func canReply(_ session: Session) -> Bool {
+        demo || holds[session.id] != nil
+    }
+
+    // MARK: Replies
+
+    /// Free text or a wrap_up button: becomes the user's next message (for a
+    /// question: the answer to every question).
+    func send(_ text: String, to session: Session) {
+        if let hold = takeHold(session) {
+            switch hold.kind {
+            case .stop:
+                hold.responder.send(["decision": "block", "reason": text])
+            case .question:
+                let answers = session.questions.reduce(into: [String: String]()) { $0[$1.text] = text }
+                hold.responder.send(Self.answerOutput(hold.toolInput, answers))
+            }
+        } else if !demo {
+            showToast("«\(session.project)» вже не чекає відповіді")
+            return
+        }
+        replied(session, note: "Відправлено в «\(session.project)»: \(text)")
+    }
+
+    /// Answers to AskUserQuestion, question text → chosen label(s) or own text.
+    func answer(_ answers: [String: String], to session: Session) {
+        if let hold = takeHold(session) {
+            hold.responder.send(Self.answerOutput(hold.toolInput, answers))
+        } else if !demo {
+            showToast("«\(session.project)» вже не чекає відповіді")
+            return
+        }
+        replied(session, note: "Відповідь у «\(session.project)»: \(answers.values.joined(separator: "; "))")
+    }
+
+    static func answerOutput(_ toolInput: [String: Any], _ answers: [String: String]) -> [String: Any] {
+        var input = toolInput
+        input["answers"] = answers
+        return ["hookSpecificOutput": [
+            "hookEventName": "PermissionRequest",
+            "decision": ["behavior": "allow", "updatedInput": input],
+        ]]
+    }
+
+    private func takeHold(_ session: Session) -> Hold? {
+        guard let hold = holds.removeValue(forKey: session.id) else { return nil }
+        hold.timeout?.cancel()
+        return hold
+    }
+
+    private func replied(_ session: Session, note: String) {
         guard let i = sessions.firstIndex(where: { $0.id == session.id }) else { return }
         sessions[i].state = .working
-        sessions[i].question = nil
+        sessions[i].questions = []
         sessions[i].wrapUp = nil
         sessions[i].command = nil
         sessions[i].updated = .now
-        showToast(note ?? "Відправлено в «\(session.project)»: \(text)")
+        showToast(note)
         selectedID = nil
     }
 
+    // MARK: Holding sessions
+
+    func hold(_ kind: Hold.Kind, session id: String, responder: Responder, toolInput: [String: Any] = [:]) {
+        release(id)
+        let hold = Hold(kind: kind, responder: responder, toolInput: toolInput)
+        let timeout = DispatchWorkItem { [weak self] in self?.release(id) }
+        hold.timeout = timeout
+        holds[id] = hold
+        let seconds = min(prefs.holdMinutes * 60, BrowSocket.maxHoldSeconds)
+        DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(seconds), execute: timeout)
+    }
+
+    /// Lets the session's hook go without a reply.
+    func release(_ id: String, only kind: Hold.Kind? = nil) {
+        guard let hold = holds[id], kind == nil || hold.kind == kind else { return }
+        holds[id] = nil
+        hold.timeout?.cancel()
+        hold.responder.release()
+    }
+
+    func releaseAll() {
+        for id in holds.keys { release(id) }
+    }
+
+    /// The user went to the app that shows these sessions: let their Stop
+    /// hooks go so the app works as usual. Questions stay, the app shows them too.
+    func appActivated(_ bundleID: String?) {
+        for session in sessions where session.appBundleID == bundleID {
+            release(session.id, only: .stop)
+        }
+    }
+
+    func isFrontmost(_ session: Session) -> Bool {
+        guard let id = session.appBundleID else { return false }
+        return NSWorkspace.shared.frontmostApplication?.bundleIdentifier == id
+    }
+
+    // MARK: Actions
+
     func runCommand(of session: Session) {
         guard let command = session.command else { return }
+        if demo {
+            showToast("Ghostty: \(command)")
+            return
+        }
+        Launcher.runInGhostty(command, cwd: session.cwd)
         showToast("Ghostty: \(command)")
+    }
+
+    func open(_ session: Session) {
+        if !demo { Launcher.open(session) }
+        showToast("Відкриваю «\(session.project)» у \(session.client.name)")
     }
 
     func showToast(_ text: String) {
@@ -112,7 +249,7 @@ final class SessionStore {
             expanded = true
         case "question":
             expanded = true
-            selectedID = sessions.first { $0.question != nil }?.id
+            selectedID = sessions.first { !$0.questions.isEmpty }?.id
         case "command":
             expanded = true
             selectedID = sessions.first { $0.command != nil }?.id
@@ -133,7 +270,7 @@ final class SessionStore {
 extension SessionStore {
     static func demo() -> SessionStore {
         let now = Date()
-        return SessionStore(sessions: [
+        let store = SessionStore(sessions: [
             Session(
                 project: "brow",
                 title: "Нотч для сесій Claude",
@@ -141,14 +278,14 @@ extension SessionStore {
                 state: .waiting,
                 updated: now.addingTimeInterval(-40),
                 lastMessage: "План першої версії готовий. Перед тим як писати міст між хуками і нотчем, треба вирішити, як brow отримує події.",
-                question: Question(
+                questions: [Question(
                     header: "Зв'язок",
                     text: "Як brow-hook передає події в нотч?",
                     options: [
                         QuestionOption(label: "Unix-сокет", detail: "Швидко, відповідь приходить одразу"),
                         QuestionOption(label: "Файли в теці", detail: "Простіше, але з затримкою"),
                     ]
-                )
+                )]
             ),
             Session(
                 project: "dipl",
@@ -184,5 +321,7 @@ extension SessionStore {
                 lastMessage: "Запускаю тести пошуку…"
             ),
         ])
+        store.demo = true
+        return store
     }
 }

@@ -54,12 +54,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         } else {
             let store = self.store
-            let server = EventServer { store.apply($0) }
+            let server = EventServer { store.apply($0, responder: $1) }
             do {
                 try server.start()
                 self.server = server
             } catch {
                 NSLog("brow: cannot listen on \(BrowSocket.path): \(error)")
+            }
+            NSWorkspace.shared.notificationCenter.addObserver(
+                forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
+            ) { note in
+                let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+                store.appActivated(app?.bundleIdentifier)
             }
             if args.contains("--open") {
                 store.expanded = true
@@ -83,5 +89,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.setFrame(frame, display: true)
         panel.orderFrontRegardless()
         self.panel = panel
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        // Held sessions go on as if brow was never there.
+        store.releaseAll()
     }
 }

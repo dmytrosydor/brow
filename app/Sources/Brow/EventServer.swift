@@ -1,15 +1,47 @@
 import BrowShared
 import Foundation
 
-/// Listens on the brow socket and hands each received JSON object to `onEvent`
-/// on the main queue.
+/// The open connection of one hook call. brow answers it exactly once: with
+/// the hook output that carries a reply, or with `release()` (prints nothing).
+final class Responder {
+    private let fd: Int32
+    private let lock = NSLock()
+    private var done = false
+
+    init(fd: Int32) {
+        self.fd = fd
+    }
+
+    func send(_ output: [String: Any]) {
+        let data = (try? JSONSerialization.data(withJSONObject: output)) ?? Data("{}".utf8)
+        finish(data)
+    }
+
+    func release() {
+        finish(Data("{}".utf8))
+    }
+
+    private func finish(_ data: Data) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !done else { return }
+        done = true
+        _ = BrowSocket.writeAll(fd, data + Data([0x0A]))
+        close(fd)
+    }
+
+    deinit { release() }
+}
+
+/// Listens on the brow socket and hands each received JSON object, with its
+/// responder, to `onEvent` on the main queue.
 final class EventServer {
-    private let onEvent: ([String: Any]) -> Void
+    private let onEvent: ([String: Any], Responder) -> Void
     private let queue = DispatchQueue(label: "brow.events")
     private var listener: Int32 = -1
     private var source: DispatchSourceRead?
 
-    init(onEvent: @escaping ([String: Any]) -> Void) {
+    init(onEvent: @escaping ([String: Any], Responder) -> Void) {
         self.onEvent = onEvent
     }
 
@@ -38,19 +70,15 @@ final class EventServer {
     private func acceptOne() {
         let client = accept(listener, nil, nil)
         guard client >= 0 else { return }
+        var on: Int32 = 1
+        setsockopt(client, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
         BrowSocket.setTimeouts(client, seconds: 2)
-        var data = Data()
-        var buffer = [UInt8](repeating: 0, count: 64 * 1024)
-        while true {
-            let n = read(client, &buffer, buffer.count)
-            if n <= 0 { break }
-            data.append(buffer, count: n)
+        let responder = Responder(fd: client)
+        guard let line = BrowSocket.readLine(client),
+              let object = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else {
+            responder.release()
+            return
         }
-        close(client)
-
-        for line in data.split(separator: 0x0A) {
-            guard let object = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { continue }
-            DispatchQueue.main.async { self.onEvent(object) }
-        }
+        DispatchQueue.main.async { self.onEvent(object, responder) }
     }
 }
