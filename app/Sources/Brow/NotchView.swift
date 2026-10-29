@@ -57,6 +57,8 @@ struct BrowGlyph: View {
 struct StatusDot: View {
     var state: SessionState
     var size: CGFloat = 8
+    /// Only visible dots pulse: a running animation redraws every frame.
+    var pulse = false
 
     var color: Color {
         switch state {
@@ -67,13 +69,17 @@ struct StatusDot: View {
     }
 
     var body: some View {
-        Circle()
+        let dot = Circle()
             .fill(color)
             .frame(width: size, height: size)
-            .shadow(color: color.opacity(0.7), radius: 4)
-            .phaseAnimator(state == .working ? [false, true] : [false]) { dot, faded in
+            .background(Circle().fill(color.opacity(0.35)).frame(width: size * 2, height: size * 2).blur(radius: 3))
+        if pulse && state == .working {
+            dot.phaseAnimator([false, true]) { dot, faded in
                 dot.opacity(faded ? 0.3 : 1)
             } animation: { _ in .easeInOut(duration: 0.8) }
+        } else {
+            dot
+        }
     }
 }
 
@@ -102,27 +108,50 @@ struct NotchRoot: View {
     let notch: NotchGeometry
     @Environment(SessionStore.self) private var store
     @State private var collapse: DispatchWorkItem?
+    /// Natural height of the open content, measured even while closed, so the
+    /// shape can spring straight to its final size.
+    @State private var openHeight: CGFloat = 300
 
     private let wing: CGFloat = 46
     private let openWidth: CGFloat = 600
 
+    private var open: Bool { store.expanded }
+    private var size: CGSize {
+        open ? CGSize(width: openWidth, height: openHeight)
+             : CGSize(width: notch.width + 2 * wing + 16, height: notch.height)
+    }
+    private var shape: NotchShape { NotchShape(top: open ? 14 : 8, bottom: open ? 26 : 12) }
+
+    // One black shape that only changes size; both contents live inside it and
+    // cross-fade, so nothing is rebuilt mid-animation.
     var body: some View {
-        VStack(spacing: 0) {
-            Group {
-                if store.expanded { expanded } else { collapsed }
+        ZStack(alignment: .top) {
+            shape
+                .fill(Color.black)
+                .shadow(color: .black.opacity(open ? 0.4 : 0), radius: 14, y: 8)
+            ZStack(alignment: .top) {
+                collapsed
+                    .opacity(open ? 0 : 1)
+                    .animation(.easeOut(duration: open ? 0.08 : 0.2), value: open)
+                expanded
+                    .fixedSize(horizontal: false, vertical: true)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { openHeight = $0 }
+                    .opacity(open ? 1 : 0)
+                    .scaleEffect(open ? 1 : 0.94, anchor: .top)
+                    .animation(open ? .easeOut(duration: 0.22).delay(0.06) : .easeOut(duration: 0.1), value: open)
+                    .allowsHitTesting(open)
             }
-            .padding(.horizontal, store.expanded ? 14 : 8)
-            .background(NotchShape(top: store.expanded ? 14 : 8, bottom: store.expanded ? 26 : 12).fill(Color.black))
-            .shadow(color: .black.opacity(store.expanded ? 0.45 : 0), radius: 18, y: 10)
-            .contentShape(Rectangle())
-            .onHover(perform: hover)
-            .onTapGesture { if !store.expanded { store.expanded = true } }
+            .frame(width: size.width, height: size.height, alignment: .top)
+            .clipShape(shape)
         }
+        .frame(width: size.width, height: size.height)
+        .contentShape(Rectangle())
+        .onHover(perform: hover)
+        .onTapGesture { if !open { store.expanded = true } }
+        .animation(.spring(response: 0.4, dampingFraction: 0.84), value: open)
+        .animation(.spring(response: 0.32, dampingFraction: 0.9), value: openHeight)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .environment(\.colorScheme, .dark)
-        .animation(.spring(response: 0.42, dampingFraction: 0.82), value: store.expanded)
-        .animation(.spring(response: 0.35, dampingFraction: 0.9), value: store.selectedID)
-        .animation(.easeOut(duration: 0.2), value: store.toast)
     }
 
     private func hover(_ inside: Bool) {
@@ -179,12 +208,13 @@ struct NotchRoot: View {
             Group {
                 if let session = store.selected {
                     SessionDetail(session: session)
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                        .id(session.id)
                 } else {
                     SessionList()
-                        .transition(.move(edge: .leading).combined(with: .opacity))
                 }
             }
+            .transition(.opacity)
+            .animation(.easeOut(duration: 0.18), value: store.selectedID)
             .padding(.top, 8)
 
             if let toast = store.toast {
@@ -202,7 +232,9 @@ struct NotchRoot: View {
             }
         }
         .padding(.bottom, 16)
-        .frame(width: openWidth - 28)
+        .padding(.horizontal, 14)
+        .frame(width: openWidth)
+        .animation(.easeOut(duration: 0.2), value: store.toast)
     }
 }
 
@@ -221,11 +253,12 @@ struct SessionList: View {
 
 struct SessionRow: View {
     var session: Session
+    @Environment(SessionStore.self) private var store
     @State private var hovered = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            StatusDot(state: session.state)
+            StatusDot(state: session.state, pulse: store.expanded)
                 .padding(.top, 5)
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
@@ -291,7 +324,7 @@ struct SessionDetail: View {
             .font(.system(size: 12, weight: .medium))
 
             HStack(spacing: 8) {
-                StatusDot(state: session.state)
+                StatusDot(state: session.state, pulse: store.expanded)
                 Text(session.project).font(.system(size: 15, weight: .bold))
                 Text(session.title).font(.system(size: 13)).foregroundStyle(Color.dim)
                 Spacer()

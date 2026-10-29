@@ -58,6 +58,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let panel = NotchPanel(frame: frame)
         let host = NSHostingView(rootView: NotchRoot(notch: notch).environment(store))
         host.frame = NSRect(origin: .zero, size: size)
+        // The panel has a fixed frame; don't let SwiftUI resize the window on
+        // every animation frame.
+        host.sizingOptions = []
         panel.contentView = host
         panel.setFrame(frame, display: true)
         panel.orderFrontRegardless()
