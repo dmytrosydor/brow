@@ -4,18 +4,35 @@ Claude sessions in the MacBook notch. brow shows which sessions finished, which 
 
 Author: Dmytro Sydor.
 
-## Status
+## How it works
 
-- `spike/` — hook experiments that proved the idea (Stop, PermissionRequest, wrap_up).
-- `app/` — the notch app (SwiftUI, macOS 14+) and `brow-hook`, the Claude Code hook that feeds it. Sessions show up live (M2); replying from the notch is next.
-- `docs/PLAN.md` — plan for the first version; `docs/brow.pdf` — overview with screenshots.
+`brow-hook` is a Claude Code command hook. It forwards each hook event to brow over `~/Library/Application Support/brow/brow.sock`. For `Stop` and `PermissionRequest` (AskUserQuestion) it waits for brow's answer:
 
-## Run
+- When Claude stops and that session's window is not in front, brow holds the hook. A reply typed in the notch, or a wrap_up button, is returned as `{"decision":"block","reason":…}` and Claude reads it as the next message.
+- An AskUserQuestion is answered with `updatedInput.answers`; whichever answers first, the notch or the app, wins.
+- A hold ends without a reply when you switch to that app, write there, the session ends, the hold times out (10 min by default) or brow quits.
+
+If brow is not running, `brow-hook` exits at once and prints nothing, so Claude is never held up.
+
+## Build and run
 
 ```bash
-cd app && swift build -c release && .build/release/Brow
+cd app && scripts/build-app.sh && open build/brow.app
 ```
 
-brow listens on `~/Library/Application Support/brow/brow.sock`. `brow-hook` reads a hook event on stdin and forwards it there; if brow is not running it exits at once, so Claude is never held up. This repo's `.claude/settings.json` wires it for sessions started in this folder.
+Right-click the notch for the menu: hold on/off, how long to wait, launch at login, connect to all Claude sessions (adds the hooks to `~/.claude/settings.json`, keeps a backup), quit. The same from the command line: `brow --install-hooks` / `--uninstall-hooks` (`--yes` skips the dialog, `BROW_CLAUDE_SETTINGS` points at another file).
 
-Flags: `--open` starts expanded; `--demo` uses demo data; `--state collapsed|list|question|command|buttons|sent` opens a demo screen. `BROW_DEBUG=1` prints received events to stderr.
+This repo's `.claude/settings.json` also wires the dev build (`app/.build/release/brow-hook`) for sessions started in this folder; drop those entries once brow is connected to all sessions, or events arrive twice.
+
+Session ids listed in `~/Library/Application Support/brow/skip_sessions` are never held.
+
+## Develop
+
+```bash
+cd app && swift build -c release && .build/release/Brow --open
+```
+
+Flags: `--open` starts expanded; `--demo` uses demo data; `--state collapsed|list|question|command|buttons|sent` opens a demo screen. `BROW_DEBUG=1` prints received events to stderr and lets `scripts/brow-ctl.py` reply, answer, release or select a session as if the notch was clicked.
+
+- `spike/` — the hook experiments that proved the idea.
+- `docs/PLAN.md` — the plan; `docs/brow.pdf` — overview with screenshots.
