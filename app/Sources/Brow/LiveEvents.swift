@@ -50,7 +50,7 @@ extension SessionStore {
             if session.title.isEmpty, let prompt = event["prompt"] as? String {
                 session.title = Self.title(from: prompt)
             }
-            if session.lastMessage == Self.newSessionText { session.lastMessage = "Працює…" }
+            if session.lastMessage == Self.newSessionText { session.lastMessage = tr("Working…", "Працює…") }
         case ("PreToolUse", "mcp__ccd_turn__wrap_up"):
             session.wrapUp = Self.wrapUp(from: input)
         case ("PreToolUse", "AskUserQuestion"):
@@ -124,7 +124,7 @@ extension SessionStore {
         )
     }
 
-    static let newSessionText = "Нова сесія"
+    static let newSessionText = tr("New session", "Нова сесія")
 
     static func title(from prompt: String) -> String {
         let line = prompt.split(whereSeparator: \.isNewline).first.map(String.init) ?? prompt

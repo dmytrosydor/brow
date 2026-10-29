@@ -109,7 +109,7 @@ struct PillButton: ButtonStyle {
 
 private let relative: RelativeDateTimeFormatter = {
     let f = RelativeDateTimeFormatter()
-    f.locale = Locale(identifier: "uk_UA")
+    f.locale = isUkrainian ? Locale(identifier: "uk_UA") : Locale(identifier: "en_US")
     f.unitsStyle = .short
     return f
 }()
@@ -209,7 +209,7 @@ struct NotchRoot: View {
                     .font(.system(size: 14, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                 Spacer(minLength: notch.width)
-                Text(store.waitingCount == 0 ? "усе спокійно" : "чекають: \(store.waitingCount)")
+                Text(store.waitingCount == 0 ? tr("all quiet", "усе спокійно") : tr("waiting: \(store.waitingCount)", "чекають: \(store.waitingCount)"))
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(store.waitingCount == 0 ? Color.dim : Color.browAccent)
             }
@@ -255,21 +255,21 @@ struct NotchMenu: View {
 
     var body: some View {
         @Bindable var prefs = store.prefs
-        Toggle("Тримати сесію для відповіді з нотча", isOn: $prefs.holdReplies)
-        Picker("Чекати на відповідь", selection: $prefs.holdMinutes) {
-            ForEach([5, 10, 20, 30], id: \.self) { Text("\($0) хв").tag($0) }
+        Toggle(tr("Hold sessions for replies from the notch", "Тримати сесію для відповіді з нотча"), isOn: $prefs.holdReplies)
+        Picker(tr("Wait for a reply", "Чекати на відповідь"), selection: $prefs.holdMinutes) {
+            ForEach([5, 10, 20, 30], id: \.self) { Text(tr("\($0) min", "\($0) хв")).tag($0) }
         }
         Divider()
         if prefs.isAppBundle {
-            Toggle("Запускати під час входу", isOn: Binding(get: { prefs.launchAtLogin }, set: { prefs.launchAtLogin = $0 }))
+            Toggle(tr("Open at login", "Запускати під час входу"), isOn: Binding(get: { prefs.launchAtLogin }, set: { prefs.launchAtLogin = $0 }))
         }
         if HookInstaller.isInstalled() {
-            Button("Відключити від усіх сесій Claude…") { HookInstaller.uninstall() }
+            Button(tr("Disconnect from all Claude sessions…", "Відключити від усіх сесій Claude…")) { HookInstaller.uninstall() }
         } else {
-            Button("Підключити до всіх сесій Claude…") { HookInstaller.install() }
+            Button(tr("Connect to all Claude sessions…", "Підключити до всіх сесій Claude…")) { HookInstaller.install() }
         }
         Divider()
-        Button("Вийти з brow") {
+        Button(tr("Quit brow", "Вийти з brow")) {
             NSApp.terminate(nil)
         }
     }
@@ -281,7 +281,7 @@ struct SessionList: View {
     var body: some View {
         VStack(spacing: 4) {
             if store.sessions.isEmpty {
-                Text("Поки немає сесій. Вони з'являться, щойно Claude щось зробить.")
+                Text(tr("No sessions yet. They show up as soon as Claude does something.", "Поки немає сесій. Вони з'являться, щойно Claude щось зробить."))
                     .font(.system(size: 12))
                     .foregroundStyle(Color.dim)
                     .frame(maxWidth: .infinity)
@@ -326,7 +326,7 @@ struct SessionRow: View {
                             .background(Color.browAccent.opacity(0.15), in: Capsule())
                     }
                     Text(Date.now.timeIntervalSince(session.updated) < 5
-                         ? "щойно" : relative.localizedString(for: session.updated, relativeTo: .now))
+                         ? tr("just now", "щойно") : relative.localizedString(for: session.updated, relativeTo: .now))
                         .font(.system(size: 11))
                         .foregroundStyle(Color.dim)
                 }
@@ -354,13 +354,13 @@ struct SessionDetail: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Button { store.select(nil) } label: {
-                    Label("Усі сесії", systemImage: "chevron.left")
+                    Label(tr("All sessions", "Усі сесії"), systemImage: "chevron.left")
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(Color.dim)
                 Spacer()
                 Button { store.open(session) } label: {
-                    Label("Відкрити", systemImage: "arrow.up.forward.app")
+                    Label(tr("Open", "Відкрити"), systemImage: "arrow.up.forward.app")
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(Color.dim)
@@ -394,7 +394,7 @@ struct SessionDetail: View {
 
             if canReply {
                 HStack(spacing: 8) {
-                    TextField(session.questions.isEmpty ? "Написати Claude…" : "Своя відповідь…", text: $draft)
+                    TextField(session.questions.isEmpty ? tr("Reply to Claude…", "Написати Claude…") : tr("Your own answer…", "Своя відповідь…"), text: $draft)
                         .textFieldStyle(.plain)
                         .font(.system(size: 13))
                         .foregroundStyle(.white)
@@ -410,7 +410,11 @@ struct SessionDetail: View {
                 .padding(.vertical, 8)
                 .background(Color.faint, in: RoundedRectangle(cornerRadius: 12))
             } else if session.state != .working {
-                Text("Сесія не чекає на відповідь з нотча. Відповісти можна в \(session.client == .desktop ? "програмі Claude" : "терміналі").")
+                Text(session.client == .desktop
+                     ? tr("This session is not waiting for a reply from the notch. Reply in the Claude app.",
+                          "Сесія не чекає на відповідь з нотча. Відповісти можна в програмі Claude.")
+                     : tr("This session is not waiting for a reply from the notch. Reply in the terminal.",
+                          "Сесія не чекає на відповідь з нотча. Відповісти можна в терміналі."))
                     .font(.system(size: 11))
                     .foregroundStyle(Color.dim)
             }
@@ -426,7 +430,7 @@ struct SessionDetail: View {
                 .lineLimit(fullMessage ? nil : 3)
                 .fixedSize(horizontal: false, vertical: true)
             if session.lastMessage.count > 140 {
-                Button(fullMessage ? "Згорнути" : "Розгорнути") { fullMessage.toggle() }
+                Button(fullMessage ? tr("Show less", "Згорнути") : tr("Show more", "Розгорнути")) { fullMessage.toggle() }
                     .buttonStyle(.plain)
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Color.browAccent)
@@ -474,7 +478,7 @@ struct QuestionCard: View {
                 }
             }
             if enabled && !sendsOnClick {
-                Button("Відправити") { submit() }
+                Button(tr("Send", "Відправити")) { submit() }
                     .buttonStyle(PillButton(primary: true))
                     .disabled(questions.contains { picked[$0.text, default: []].isEmpty })
             }
@@ -558,15 +562,15 @@ struct CommandCard: View {
                 .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
             HStack(spacing: 8) {
                 Button { store.runCommand(of: session) } label: {
-                    Label("Запустити в Ghostty", systemImage: "play.fill")
+                    Label(tr("Run in Ghostty", "Запустити в Ghostty"), systemImage: "play.fill")
                 }
                 .buttonStyle(PillButton(primary: true))
                 Button {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(command, forType: .string)
-                    store.showToast("Скопійовано")
+                    store.showToast(tr("Copied", "Скопійовано"))
                 } label: {
-                    Label("Копіювати", systemImage: "doc.on.doc")
+                    Label(tr("Copy", "Копіювати"), systemImage: "doc.on.doc")
                 }
                 .buttonStyle(PillButton())
             }

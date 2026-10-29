@@ -28,41 +28,72 @@ enum HookInstaller {
         Bundle.main.executableURL!.deletingLastPathComponent().appendingPathComponent("brow-hook").path
     }
 
+    private static var eventList: String { events.map(\.name).joined(separator: ", ") }
+
     static func isInstalled() -> Bool {
-        guard let hooks = readSettings()?["hooks"] as? [String: Any] else { return false }
-        return hooks.values.contains { entries in
-            (entries as? [[String: Any]] ?? []).contains(where: isBrowEntry)
-        }
+        installedHookPath() != nil
     }
 
     /// Asks first (unless `ask` is false), keeps a copy of the old file, then
     /// writes the new one.
     static func install(ask: Bool = true) {
         confirmAndWrite(ask: ask,
-            title: "Підключити brow до всіх сесій Claude?",
-            text: "brow додасть свій хук у \(settingsURL.path) для подій: \(events.map(\.name).joined(separator: ", ")).\n\nКоманда: \(hookPath)\n\nСтара версія файлу збережеться поруч. Файл буде записано заново (ключі по алфавіту).",
-            button: "Підключити"
-        ) { settings in
-            var hooks = settings["hooks"] as? [String: Any] ?? [:]
-            removeBrow(from: &hooks)
-            for event in events {
-                var entry: [String: Any] = ["hooks": [[
-                    "type": "command",
-                    "command": "\"\(hookPath)\"",
-                    "timeout": event.name == "Stop" || event.name == "PermissionRequest" ? 1900 : 5,
-                ]]]
-                if let matcher = event.matcher { entry["matcher"] = matcher }
-                hooks[event.name] = (hooks[event.name] as? [[String: Any]] ?? []) + [entry]
+            title: tr("Connect brow to all Claude sessions?", "Підключити brow до всіх сесій Claude?"),
+            text: tr("brow will add its hook to \(settingsURL.path) for: \(eventList).\n\nCommand: \(hookPath)\n\nA copy of the old file is kept next to it. The file is rewritten with keys in alphabetical order.",
+                     "brow додасть свій хук у \(settingsURL.path) для подій: \(eventList).\n\nКоманда: \(hookPath)\n\nСтара версія файлу збережеться поруч. Файл буде записано заново (ключі по алфавіту)."),
+            button: tr("Connect", "Підключити"),
+            change: addBrow)
+    }
+
+    /// The hooks point at another brow-hook: one that is gone (brow.app was
+    /// moved), or any other while this copy runs from /Applications. Offer to
+    /// point them here.
+    static func offerPathUpdate() {
+        guard let installed = installedHookPath(), installed != hookPath,
+              !FileManager.default.fileExists(atPath: installed) || hookPath.hasPrefix("/Applications/") else { return }
+        confirmAndWrite(ask: true,
+            title: tr("brow was moved", "brow перемістили"),
+            text: tr("The Claude hooks still point at \(installed). Point them at \(hookPath)?",
+                     "Хуки Claude досі вказують на \(installed). Перевести їх на \(hookPath)?"),
+            button: tr("Update", "Оновити"),
+            change: addBrow)
+    }
+
+    static func installedHookPath() -> String? {
+        let hooks = readSettings()?["hooks"] as? [String: Any] ?? [:]
+        for entries in hooks.values {
+            for entry in entries as? [[String: Any]] ?? [] {
+                for hook in entry["hooks"] as? [[String: Any]] ?? [] {
+                    if let command = hook["command"] as? String, command.contains("brow-hook") {
+                        return command.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+                    }
+                }
             }
-            settings["hooks"] = hooks
         }
+        return nil
+    }
+
+    private static func addBrow(to settings: inout [String: Any]) {
+        var hooks = settings["hooks"] as? [String: Any] ?? [:]
+        removeBrow(from: &hooks)
+        for event in events {
+            var entry: [String: Any] = ["hooks": [[
+                "type": "command",
+                "command": "\"\(hookPath)\"",
+                "timeout": event.name == "Stop" || event.name == "PermissionRequest" ? 1900 : 5,
+            ]]]
+            if let matcher = event.matcher { entry["matcher"] = matcher }
+            hooks[event.name] = (hooks[event.name] as? [[String: Any]] ?? []) + [entry]
+        }
+        settings["hooks"] = hooks
     }
 
     static func uninstall(ask: Bool = true) {
         confirmAndWrite(ask: ask,
-            title: "Відключити brow від сесій Claude?",
-            text: "brow прибере свої хуки з \(settingsURL.path). Стара версія файлу збережеться поруч.",
-            button: "Відключити"
+            title: tr("Disconnect brow from Claude sessions?", "Відключити brow від сесій Claude?"),
+            text: tr("brow will remove its hooks from \(settingsURL.path). A copy of the old file is kept next to it.",
+                     "brow прибере свої хуки з \(settingsURL.path). Стара версія файлу збережеться поруч."),
+            button: tr("Disconnect", "Відключити")
         ) { settings in
             var hooks = settings["hooks"] as? [String: Any] ?? [:]
             removeBrow(from: &hooks)
@@ -95,7 +126,8 @@ enum HookInstaller {
         interactive = ask
         if ask { NSApp.activate(ignoringOtherApps: true) }
         guard var settings = readSettings() else {
-            alert("Не вдалося прочитати \(settingsURL.path)", "Файл існує, але це не JSON. Нічого не змінено.")
+            alert(tr("Could not read \(settingsURL.path)", "Не вдалося прочитати \(settingsURL.path)"),
+                  tr("The file exists but is not JSON. Nothing was changed.", "Файл існує, але це не JSON. Нічого не змінено."))
             return
         }
         if ask {
@@ -103,7 +135,7 @@ enum HookInstaller {
             confirm.messageText = title
             confirm.informativeText = text
             confirm.addButton(withTitle: button)
-            confirm.addButton(withTitle: "Скасувати")
+            confirm.addButton(withTitle: tr("Cancel", "Скасувати"))
             guard confirm.runModal() == .alertFirstButtonReturn else { return }
         }
 
@@ -125,7 +157,7 @@ enum HookInstaller {
                                                   options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
             try (data + Data([0x0A])).write(to: settingsURL, options: .atomic)
         } catch {
-            alert("Не вдалося записати налаштування", error.localizedDescription)
+            alert(tr("Could not write the settings", "Не вдалося записати налаштування"), error.localizedDescription)
         }
     }
 

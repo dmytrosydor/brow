@@ -11,7 +11,7 @@ enum Client {
     case desktop, terminal
 
     var symbol: String { self == .desktop ? "macwindow" : "terminal" }
-    var name: String { self == .desktop ? "Claude" : "Термінал" }
+    var name: String { self == .desktop ? "Claude" : tr("Terminal", "Термінал") }
 }
 
 struct QuestionOption: Hashable {
@@ -56,9 +56,9 @@ struct Session: Identifiable {
 
     /// What the notch can do for this session, shown as a tag in the list.
     var tag: String? {
-        if !questions.isEmpty { return "Питання" }
-        if wrapUp?.actions.isEmpty == false { return "Кнопки" }
-        if command != nil { return "Команда" }
+        if !questions.isEmpty { return tr("Question", "Питання") }
+        if wrapUp?.actions.isEmpty == false { return tr("Buttons", "Кнопки") }
+        if command != nil { return tr("Command", "Команда") }
         return nil
     }
 
@@ -136,10 +136,10 @@ final class SessionStore {
                 hold.responder.send(Self.answerOutput(hold.toolInput, answers))
             }
         } else if !demo {
-            showToast("«\(session.project)» вже не чекає відповіді")
+            showToast(tr("\(session.project) is no longer waiting for a reply", "«\(session.project)» вже не чекає відповіді"))
             return
         }
-        replied(session, note: "Відправлено в «\(session.project)»: \(text)")
+        replied(session, note: tr("Sent to \(session.project): \(text)", "Відправлено в «\(session.project)»: \(text)"))
     }
 
     /// Answers to AskUserQuestion, question text → chosen label(s) or own text.
@@ -147,10 +147,10 @@ final class SessionStore {
         if let hold = takeHold(session) {
             hold.responder.send(Self.answerOutput(hold.toolInput, answers))
         } else if !demo {
-            showToast("«\(session.project)» вже не чекає відповіді")
+            showToast(tr("\(session.project) is no longer waiting for a reply", "«\(session.project)» вже не чекає відповіді"))
             return
         }
-        replied(session, note: "Відповідь у «\(session.project)»: \(answers.values.joined(separator: "; "))")
+        replied(session, note: tr("Answered \(session.project): ", "Відповідь у «\(session.project)»: ") + answers.values.joined(separator: "; "))
     }
 
     static func answerOutput(_ toolInput: [String: Any], _ answers: [String: String]) -> [String: Any] {
@@ -230,7 +230,7 @@ final class SessionStore {
 
     func open(_ session: Session) {
         if !demo { Launcher.open(session) }
-        showToast("Відкриваю «\(session.project)» у \(session.client.name)")
+        showToast(tr("Opening \(session.project) in \(session.client.name)", "Відкриваю «\(session.project)» у \(session.client.name)"))
     }
 
     func showToast(_ text: String) {
@@ -272,53 +272,61 @@ extension SessionStore {
         let now = Date()
         let store = SessionStore(sessions: [
             Session(
-                project: "brow",
-                title: "Нотч для сесій Claude",
+                project: "notes-app",
+                title: tr("Sync between devices", "Синхронізація між пристроями"),
                 client: .desktop,
                 state: .waiting,
                 updated: now.addingTimeInterval(-40),
-                lastMessage: "План першої версії готовий. Перед тим як писати міст між хуками і нотчем, треба вирішити, як brow отримує події.",
+                lastMessage: tr("The sync plan is ready. Before I write the conflict handling, pick how edits on two devices should merge.",
+                                "План синхронізації готовий. Перед тим як писати обробку конфліктів, вибери, як зливати зміни з двох пристроїв."),
                 questions: [Question(
-                    header: "Зв'язок",
-                    text: "Як brow-hook передає події в нотч?",
+                    header: tr("Conflicts", "Конфлікти"),
+                    text: tr("How should conflicting edits merge?", "Як зливати конфліктні зміни?"),
                     options: [
-                        QuestionOption(label: "Unix-сокет", detail: "Швидко, відповідь приходить одразу"),
-                        QuestionOption(label: "Файли в теці", detail: "Простіше, але з затримкою"),
+                        QuestionOption(label: tr("Last write wins", "Перемагає останній запис"),
+                                       detail: tr("Simple, may lose an edit", "Просто, але можна втратити зміну")),
+                        QuestionOption(label: tr("Keep both", "Зберегти обидва"),
+                                       detail: tr("Shows a copy to resolve by hand", "Покаже копію, щоб вирішити вручну")),
                     ]
                 )]
             ),
             Session(
-                project: "dipl",
-                title: "Розділ 3: експерименти",
+                project: "thesis",
+                title: tr("Chapter 3: experiments", "Розділ 3: експерименти"),
                 client: .desktop,
                 state: .waiting,
                 updated: now.addingTimeInterval(-5 * 60),
-                lastMessage: "Таблиця 3.2 оновлена, графіки перебудовані. Знайшов розбіжність у метриці F1 між ноутбуком і текстом розділу: у тексті 0.87, у ноутбуці 0.84.",
+                lastMessage: tr("Table 3.2 is updated and the plots are rebuilt. The F1 score in the text does not match the notebook: 0.87 in the text, 0.84 in the notebook.",
+                                "Таблиця 3.2 оновлена, графіки перебудовані. Знайшов розбіжність у метриці F1 між ноутбуком і текстом розділу: у тексті 0.87, у ноутбуці 0.84."),
                 wrapUp: WrapUp(
-                    recap: "Таблиця і графіки оновлені. F1 у тексті не збігається з ноутбуком.",
-                    ask: "Виправити текст під ноутбук?",
+                    recap: tr("Table and plots updated. F1 in the text differs from the notebook.",
+                              "Таблиця і графіки оновлені. F1 у тексті не збігається з ноутбуком."),
+                    ask: tr("Fix the text to match the notebook?", "Виправити текст під ноутбук?"),
                     actions: [
-                        WrapAction(label: "Так, виправ", message: "Так, виправ текст під ноутбук."),
-                        WrapAction(label: "Перерахуй F1", message: "Спершу перерахуй F1 у ноутбуці."),
+                        WrapAction(label: tr("Yes, fix it", "Так, виправ"),
+                                   message: tr("Yes, fix the text to match the notebook.", "Так, виправ текст під ноутбук.")),
+                        WrapAction(label: tr("Recompute F1", "Перерахуй F1"),
+                                   message: tr("Recompute F1 in the notebook first.", "Спершу перерахуй F1 у ноутбуці.")),
                     ]
                 )
             ),
             Session(
-                project: "CGRBAR",
-                title: "Збірка релізу",
+                project: "api-server",
+                title: tr("Release build", "Збірка релізу"),
                 client: .terminal,
                 state: .done,
                 updated: now.addingTimeInterval(-12 * 60),
-                lastMessage: "Зміни закомічені локально. Щоб відправити на GitHub, запусти команду нижче.",
-                command: "git -C ~/Desktop/laluk/CGRBAR push origin main"
+                lastMessage: tr("Changes are committed locally. Run the command below to push them.",
+                                "Зміни закомічені локально. Щоб відправити на GitHub, запусти команду нижче."),
+                command: "git push origin main"
             ),
             Session(
-                project: "Engram",
-                title: "Пошук по пам'яті",
+                project: "website",
+                title: tr("Search page", "Сторінка пошуку"),
                 client: .terminal,
                 state: .working,
                 updated: now.addingTimeInterval(-8),
-                lastMessage: "Запускаю тести пошуку…"
+                lastMessage: tr("Running the search tests…", "Запускаю тести пошуку…")
             ),
         ])
         store.demo = true
