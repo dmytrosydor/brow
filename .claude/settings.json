@@ -35,6 +35,16 @@
     ],
     "PermissionRequest": [
       {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/spike/ask_probe.py\"",
+            "timeout": 600
+          }
+        ]
+      },
+      {
         "hooks": [
           {
             "type": "command",
