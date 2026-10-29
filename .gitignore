@@ -1,0 +1,6 @@
+.DS_Store
+spike/log/
+spike/hold
+spike/reply.txt
+spike/waiting.json
+spike/skip_sessions
