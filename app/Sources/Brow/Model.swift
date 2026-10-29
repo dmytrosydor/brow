@@ -37,7 +37,7 @@ struct WrapUp {
 }
 
 struct Session: Identifiable {
-    let id = UUID()
+    var id = UUID().uuidString
     var project: String
     var title: String
     var client: Client
@@ -47,6 +47,7 @@ struct Session: Identifiable {
     var command: String?
     var wrapUp: WrapUp?
     var question: Question?
+    var cwd: String?
 
     /// What the notch can do for this session, shown as a tag in the list.
     var tag: String? {

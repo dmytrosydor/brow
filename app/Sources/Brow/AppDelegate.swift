@@ -1,4 +1,5 @@
 import AppKit
+import BrowShared
 import SwiftUI
 
 /// Size of the physical notch, or of a pill of the same height on Macs without one.
@@ -41,12 +42,29 @@ final class NotchPanel: NSPanel {
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var panel: NotchPanel?
-    private let store = SessionStore.demo()
+    private var server: EventServer?
+    private var store = SessionStore(sessions: [])
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let args = CommandLine.arguments
-        if let i = args.firstIndex(of: "--state"), i + 1 < args.count {
-            store.applyDemoState(args[i + 1])
+        if args.contains("--demo") || args.contains("--state") {
+            store = SessionStore.demo()
+            if let i = args.firstIndex(of: "--state"), i + 1 < args.count {
+                store.applyDemoState(args[i + 1])
+            }
+        } else {
+            let store = self.store
+            let server = EventServer { store.apply($0) }
+            do {
+                try server.start()
+                self.server = server
+            } catch {
+                NSLog("brow: cannot listen on \(BrowSocket.path): \(error)")
+            }
+            if args.contains("--open") {
+                store.expanded = true
+                store.pinned = true
+            }
         }
 
         let screen = NSScreen.screens.first { $0.safeAreaInsets.top > 0 } ?? NSScreen.main ?? NSScreen.screens[0]

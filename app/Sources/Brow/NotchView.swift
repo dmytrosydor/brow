@@ -181,7 +181,7 @@ struct NotchRoot: View {
                     Text("\(store.waitingCount)")
                         .font(.system(size: 12, weight: .semibold, design: .rounded))
                         .foregroundStyle(.white)
-                } else {
+                } else if !store.sessions.isEmpty {
                     StatusDot(state: store.sessions.contains { $0.state == .working } ? .working : .done, size: 7)
                 }
             }
@@ -243,6 +243,13 @@ struct SessionList: View {
 
     var body: some View {
         VStack(spacing: 4) {
+            if store.sessions.isEmpty {
+                Text("Поки немає сесій. Вони з'являться, щойно Claude щось зробить.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.dim)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 18)
+            }
             ForEach(store.sessions) { session in
                 SessionRow(session: session)
                     .onTapGesture { store.select(session) }
