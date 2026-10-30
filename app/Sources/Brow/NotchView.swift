@@ -389,7 +389,7 @@ struct SessionRow: View {
                     }
                 }
                 Text(session.permission.map { "\($0.title): \($0.detail)" } ?? session.questions.first?.text
-                     ?? session.activity.flatMap { session.state == .working ? store.prefs.text(of: $0) : nil } ?? session.lastMessage)
+                     ?? session.activity.flatMap { session.state == .working ? store.prefs.text(of: $0) : nil } ?? MarkdownBlock.plain(session.lastMessage))
                     .font(.system(size: 12))
                     .foregroundStyle(Color.white.opacity(0.7))
                     .lineLimit(1)
@@ -505,12 +505,22 @@ struct SessionDetail: View {
 
     private var message: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(session.lastMessage)
-                .font(.system(size: 13))
-                .foregroundStyle(Color.white.opacity(0.9))
-                .lineLimit(fullMessage ? nil : 3)
+            if fullMessage {
+                // Long messages scroll, so the buttons and the reply field stay in reach.
+                ScrollView {
+                    MarkdownText(text: session.lastMessage)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxHeight: 340)
                 .fixedSize(horizontal: false, vertical: true)
-            if session.lastMessage.count > 140 {
+            } else {
+                Text(MarkdownBlock.plain(session.lastMessage))
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.white.opacity(0.9))
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if session.lastMessage.count > 140 || session.lastMessage.contains("\n") {
                 Button(fullMessage ? tr("Show less", "Згорнути") : tr("Show more", "Розгорнути")) { fullMessage.toggle() }
                     .buttonStyle(.plain)
                     .font(.system(size: 11, weight: .semibold))

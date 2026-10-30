@@ -401,7 +401,7 @@ final class SessionStore {
             return Peek(sessionID: session.id, title: tr("\(session.project) is asking", "\(session.project) питає"), detail: question.text)
         }
         return Peek(sessionID: session.id, title: tr("\(session.project) finished", "\(session.project) закінчив"),
-                    detail: firstLine(session.lastMessage))
+                    detail: MarkdownBlock.plain(session.lastMessage))
     }
 
     private func show(peek new: Peek) {

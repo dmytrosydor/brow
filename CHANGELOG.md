@@ -2,6 +2,7 @@
 
 ## 0.2.0 — 2026-10-30
 
+- Messages are formatted (bold, code, lists, headings) and long ones scroll, so the buttons and the reply field stay in reach. Previews show plain text.
 - Live activity: a working session shows its current action and elapsed time. The text can be hidden in the menu.
 - Queue: while Claude works, messages typed in the notch wait and go out together at its next stop. They can be edited or cancelled until then.
 - Alerts: the notch slides down for four seconds when a session starts waiting, once per request, and sums up when several wait. Hover to open that session. Sound is optional. No alert when the session's app is in front.
