@@ -77,6 +77,8 @@ struct Session: Identifiable {
     var lastEvent = Date.now
     /// Marked working, but silent for a long time: possibly closed unannounced.
     var stale = false
+    var usage: ContextUsage?
+    var contextWarned = false
     var cwd: String?
     /// TERM_PROGRAM of a terminal session, to know which app shows it.
     var termProgram: String?
@@ -150,6 +152,9 @@ final class SessionStore {
     /// Parallel tool calls ask at once: further permissions wait here, one is
     /// shown at a time.
     var queuedPermissions: [String: [Hold]] = [:]
+    private let transcripts = TranscriptUsage()
+    /// When each session's transcript was last read, to read at most every few seconds.
+    private var usageRead: [String: Date] = [:]
     var peek: Peek?
     /// The first-run card is showing.
     var welcome = false
@@ -167,6 +172,8 @@ final class SessionStore {
 
     func forget(_ id: String) {
         peekKeys[id] = nil
+        usageRead[id] = nil
+        transcripts.forget(session: id)
         if peek?.sessionID == id { hidePeek() }
     }
 
@@ -370,6 +377,32 @@ final class SessionStore {
     func isFrontmost(_ session: Session) -> Bool {
         guard let id = session.appBundleID else { return false }
         return NSWorkspace.shared.frontmostApplication?.bundleIdentifier == id
+    }
+
+    // MARK: Context
+
+    /// Reads the transcript on Stop, and at most every 15 seconds while working.
+    func refreshUsage(session id: String, path: String?, force: Bool) {
+        guard let path, !path.isEmpty else { return }
+        if !force, let last = usageRead[id], Date.now.timeIntervalSince(last) < 15 { return }
+        usageRead[id] = .now
+        transcripts.read(session: id, path: path) { [weak self] usage in
+            self?.apply(usage: usage, session: id)
+        }
+    }
+
+    private func apply(usage: ContextUsage, session id: String) {
+        guard let i = sessions.firstIndex(where: { $0.id == id }) else { return }
+        sessions[i].usage = usage
+        // Warn once per climb; a compaction brings the use down and re-arms it.
+        if usage.fraction < 0.8 { sessions[i].contextWarned = false }
+        guard usage.fraction >= 0.9, !sessions[i].contextWarned else { return }
+        sessions[i].contextWarned = true
+        guard !expanded, prefs.peekAlerts else { return }
+        show(peek: Peek(sessionID: id,
+                        title: tr("\(sessions[i].project): context is ≈\(usage.percent)% full",
+                                  "\(sessions[i].project): контекст заповнено на ≈\(usage.percent)%"),
+                        detail: tr("Time to compact it or start a new session", "Час стиснути його або почати нову сесію")))
     }
 
     // MARK: Old sessions
@@ -601,7 +634,8 @@ extension SessionStore {
                 updated: now.addingTimeInterval(-12 * 60),
                 lastMessage: tr("Changes are committed locally. Run the command below to push them.",
                                 "Зміни закомічені локально. Щоб відправити на GitHub, запусти команду нижче."),
-                command: "git push origin main"
+                command: "git push origin main",
+                usage: ContextUsage(used: 180_000, window: 1_000_000, written: 12_000)
             ),
             Session(
                 project: "mobile-app",
@@ -622,7 +656,8 @@ extension SessionStore {
                 updated: now.addingTimeInterval(-8),
                 lastMessage: tr("The search page is ready, now checking it.", "Сторінка пошуку готова, перевіряю її."),
                 activity: Activity(kind: tr("Running a command", "Запускає команду"), detail: "npm test -- search"),
-                workStarted: now.addingTimeInterval(-252)
+                workStarted: now.addingTimeInterval(-252),
+                usage: ContextUsage(used: 720_000, window: 1_000_000, written: 41_000)
             ),
         ])
         store.demo = true

@@ -362,6 +362,31 @@ struct SessionList: View {
     }
 }
 
+/// How full the context is: gray, then orange from 70%, red from 90%.
+struct ContextBar: View {
+    var usage: ContextUsage
+
+    private var color: Color {
+        usage.fraction >= 0.9 ? .red : usage.fraction >= 0.7 ? .browAccent : Color.white.opacity(0.4)
+    }
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Capsule()
+                .fill(Color.white.opacity(0.12))
+                .frame(width: 36, height: 4)
+                .overlay(alignment: .leading) {
+                    Capsule().fill(color).frame(width: max(4, 36 * usage.fraction), height: 4)
+                }
+            Text("≈\(usage.percent)%")
+                .font(.system(size: 10, weight: .medium))
+                .monospacedDigit()
+                .foregroundStyle(usage.fraction >= 0.7 ? color : Color.dim)
+        }
+        .help(tr("Context used, an estimate", "Використано контексту, приблизно"))
+    }
+}
+
 /// Time since `date`, ticking once a second. Only built while the notch is
 /// open, so a closed notch does not redraw.
 struct Elapsed: View {
@@ -401,6 +426,9 @@ struct SessionRow: View {
                         .foregroundStyle(Color.dim)
                         .lineLimit(1)
                     Spacer()
+                    if let usage = session.usage {
+                        ContextBar(usage: usage)
+                    }
                     if let tag = session.tag, session.state != .working || !session.queued.isEmpty {
                         Text(tag)
                             .font(.system(size: 10, weight: .semibold))
@@ -479,6 +507,16 @@ struct SessionDetail: View {
                     .foregroundStyle(Color.dim)
             }
             .foregroundStyle(.white)
+
+            if let usage = session.usage {
+                HStack(spacing: 8) {
+                    ContextBar(usage: usage)
+                    Text(tr("\(ContextUsage.short(usage.used)) of ≈\(ContextUsage.short(usage.window)) · Claude wrote \(ContextUsage.short(usage.written)) tokens",
+                            "\(ContextUsage.short(usage.used)) з ≈\(ContextUsage.short(usage.window)) · Claude написав \(ContextUsage.short(usage.written)) токенів"))
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.dim)
+                }
+            }
 
             if session.lastMessage != SessionStore.newSessionText {
                 message

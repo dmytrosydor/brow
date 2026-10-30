@@ -158,6 +158,7 @@ extension SessionStore {
         }
         sessions.sort { $0.updated > $1.updated }
         considerPeek(session)
+        refreshUsage(session: id, path: event["transcript_path"] as? String, force: name == "Stop")
     }
 
     /// Test hook, only with BROW_DEBUG: act as if the notch was clicked.
