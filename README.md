@@ -11,12 +11,15 @@ brow lives in the notch and shows where each Claude Code session stands: which o
 ## Features
 
 - **Every session at a glance.** The closed notch shows how many sessions are waiting for you; hover to see them all with their project, title, state and last message.
+- **Alerts you can't miss.** When a session starts waiting, the notch slides down for four seconds and says who needs what. Hover to answer, or ignore it and it tucks away. An optional sound is in the menu. No alert for a session whose app is already in front.
 - **Reply from the notch.** What you type reaches Claude as your next message.
 - **Permissions from the notch.** When Claude asks to run a command or change a file, see exactly what it wants and press Allow or Deny, or type why not. Nothing is ever approved on its own.
 - **Buttons and questions.** The buttons at the end of a reply in the desktop app, and multiple-choice questions (one or several, multi-select or your own answer), work from the notch.
 - **Run suggested commands.** A shell block in Claude's message gets a button that opens it in a new [Ghostty](https://ghostty.org) window, in the session's folder. Nothing runs until you click.
 - **Stays out of the way.** No Dock icon, no CPU when idle, and if brow is not running Claude behaves exactly as before.
 - English and Ukrainian, following the system language.
+
+![The notch sliding down to say a session wants to run a command](docs/img/en/peek.png)
 
 | Permission | Question |
 |---|---|
@@ -70,6 +73,7 @@ Right-click the notch:
 
 - **Hold sessions for replies from the notch** — turn holding off to use brow only as a status display.
 - **Wait for a reply** — 5, 10, 20 or 30 minutes.
+- **Show alerts when a session waits** and **Alert sound**.
 - **Open at login.**
 - **Connect to / Disconnect from all Claude sessions.**
 - **Quit brow.**

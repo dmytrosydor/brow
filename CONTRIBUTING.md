@@ -21,7 +21,7 @@ cd app
 swift build -c release
 .build/release/Brow --open          # live, starts expanded
 .build/release/Brow --demo          # demo data, nothing is sent
-.build/release/Brow --state question  # a demo screen: collapsed|list|question|command|buttons|sent
+.build/release/Brow --state question  # a demo screen: collapsed|peek|list|question|permission|command|buttons|sent
 ```
 
 Add `-AppleLanguages "(en)"` or `"(uk)"` to pick the language.
