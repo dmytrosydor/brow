@@ -2,10 +2,11 @@
 
 ## 0.2.0 — 2026-10-30
 
+- Live activity: a working session shows its current action and elapsed time. The text can be hidden in the menu.
 - Queue: while Claude works, messages typed in the notch wait and go out together at its next stop. They can be edited or cancelled until then.
 - Alerts: the notch slides down for four seconds when a session starts waiting, once per request, and sums up when several wait. Hover to open that session. Sound is optional. No alert when the session's app is in front.
 - Permissions from the notch: a card shows the whole command or change, with Allow, Deny, or a typed reason for denying. Several requests at once are shown one by one.
-- The hooks now also cover every `PostToolUse`, `PostToolUseFailure` and `PermissionRequest`. brow offers to update hooks from an older version.
+- The hooks now also cover every `PreToolUse`, `PostToolUse`, `PostToolUseFailure` and `PermissionRequest`. brow offers to update hooks from an older version.
 - A session is marked as working again after each tool call.
 
 ## 0.1.1 — 2026-10-30

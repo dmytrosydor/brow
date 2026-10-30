@@ -11,6 +11,7 @@ brow lives in the notch and shows where each Claude Code session stands: which o
 ## Features
 
 - **Every session at a glance.** The closed notch shows how many sessions are waiting for you; hover to see them all with their project, title, state and last message.
+- **Live activity.** A working session shows what Claude is doing right now and for how long: `Running a command: npm test · 4 min 12 s`. Hide the command text from the menu if your screen is visible to others.
 - **Alerts you can't miss.** When a session starts waiting, the notch slides down for four seconds and says who needs what. Hover to answer, or ignore it and it tucks away. An optional sound is in the menu. No alert for a session whose app is already in front.
 - **Reply from the notch.** What you type reaches Claude as your next message.
 - **Queue the next step.** While Claude works, write what it should do next. It gets the message the moment it stops, so you can line up work across sessions and walk away.
@@ -61,7 +62,7 @@ Claude (app or terminal) ──hook──▶ brow-hook ──Unix socket──�
           └──────────── your reply / answer ◀──────────────────────┘
 ```
 
-brow adds one small command, `brow-hook`, to Claude Code's [hooks](https://docs.claude.com/en/docs/claude-code/hooks) for these events: `SessionStart`, `UserPromptSubmit`, `Stop`, `Notification`, `SessionEnd`, `PreToolUse` (AskUserQuestion and the wrap_up box), `PostToolUse`/`PostToolUseFailure` and `PermissionRequest`. The hook passes each event to brow over a socket in `~/Library/Application Support/brow/`.
+brow adds one small command, `brow-hook`, to Claude Code's [hooks](https://docs.claude.com/en/docs/claude-code/hooks) for these events: `SessionStart`, `UserPromptSubmit`, `Stop`, `Notification`, `SessionEnd`, `PreToolUse`, `PostToolUse`/`PostToolUseFailure` and `PermissionRequest`. The hook passes each event to brow over a socket in `~/Library/Application Support/brow/`.
 
 To get a reply back to Claude, brow briefly **holds** the session:
 
@@ -79,6 +80,7 @@ Right-click the notch:
 
 - **Hold sessions for replies from the notch** — turn holding off to use brow only as a status display.
 - **Wait for a reply** — 5, 10, 20 or 30 minutes.
+- **Show the text of what Claude runs** — off shows only the kind of action, in case commands carry secrets.
 - **Show alerts when a session waits** and **Alert sound**.
 - **Open at login.**
 - **Connect to / Disconnect from all Claude sessions.**
