@@ -130,7 +130,7 @@ final class SessionStore {
         if let hold = takeHold(session) {
             switch hold.kind {
             case .stop:
-                hold.responder.send(["decision": "block", "reason": text])
+                hold.responder.send(["decision": "block", "reason": Self.replyReason(text)])
             case .question:
                 let answers = session.questions.reduce(into: [String: String]()) { $0[$1.text] = text }
                 hold.responder.send(Self.answerOutput(hold.toolInput, answers))
@@ -151,6 +151,13 @@ final class SessionStore {
             return
         }
         replied(session, note: tr("Answered \(session.project): ", "Відповідь у «\(session.project)»: ") + answers.values.joined(separator: "; "))
+    }
+
+    /// Claude sees a Stop block reason as hook feedback; say it is the user
+    /// talking, or it may treat the reply as a message from the hook.
+    static func replyReason(_ text: String) -> String {
+        "The user replied from brow, the notch app that shows this session, instead of the chat. "
+            + "Treat it as their next message:\n\n" + text
     }
 
     static func answerOutput(_ toolInput: [String: Any], _ answers: [String: String]) -> [String: Any] {
@@ -197,6 +204,11 @@ final class SessionStore {
         holds[id] = nil
         hold.timeout?.cancel()
         hold.responder.release()
+        // Nothing left to answer from the notch: a plain stop is just done.
+        if hold.kind == .stop, let i = sessions.firstIndex(where: { $0.id == id }),
+           sessions[i].state == .waiting, sessions[i].questions.isEmpty, sessions[i].wrapUp?.ask == nil {
+            sessions[i].state = .done
+        }
     }
 
     func releaseAll() {

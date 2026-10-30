@@ -81,6 +81,8 @@ extension SessionStore {
             if mayHold && !isFrontmost(session) {
                 hold(.stop, session: id, responder: responder)
                 held = true
+                // Held means Claude is waiting for the user, even with no question.
+                session.state = .waiting
             }
         default:
             return
