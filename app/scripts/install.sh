@@ -4,7 +4,7 @@
 set -eu
 
 cd "$(dirname "$0")/.."
-scripts/build-app.sh "${1:-0.2.0}"
+scripts/build-app.sh "${1:-0.2.1}"
 
 pkill -x brow 2>/dev/null || true
 rm -rf /Applications/brow.app

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.1 — 2026-10-30
 
 - Hooks exit quietly if brow.app has been deleted. Before, Claude reported a hook error at every stop. brow offers to update hooks from an older version.
 - Automated tests, run on every push.
