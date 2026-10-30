@@ -195,10 +195,7 @@ struct NotchRoot: View {
             return
         }
         guard !store.pinned else { return }
-        let work = DispatchWorkItem {
-            store.expanded = false
-            store.selectedID = nil
-        }
+        let work = DispatchWorkItem { store.closePanel() }
         collapse = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: work)
     }
@@ -292,6 +289,15 @@ struct NotchRoot: View {
             .animation(.easeOut(duration: 0.18), value: store.selectedID)
             .padding(.top, 8)
 
+            if store.keyboardMode {
+                Text(tr("↑↓ sessions · 1–9 choose · ⌘↵ allow · ⌘⌫ deny · type to reply · esc close",
+                        "↑↓ сесії · 1–9 вибір · ⌘↵ дозволити · ⌘⌫ відхилити · пиши, щоб відповісти · esc закрити"))
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color.dim)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 10)
+            }
+
             if let toast = store.toast {
                 HStack(spacing: 8) {
                     Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.browGreen)
@@ -326,6 +332,9 @@ struct NotchMenu: View {
         Toggle(tr("Show the text of what Claude runs", "Показувати текст команд Claude"), isOn: $prefs.showActivityDetail)
         Toggle(tr("Show alerts when a session waits", "Показувати сповіщення, коли сесія чекає"), isOn: $prefs.peekAlerts)
         Toggle(tr("Alert sound", "Звук сповіщення"), isOn: $prefs.peekSound)
+        Picker(tr("Keyboard shortcut", "Гаряча клавіша"), selection: $prefs.hotKey) {
+            ForEach(HotKeyChoice.allCases, id: \.self) { Text($0.title).tag($0) }
+        }
         Divider()
         if prefs.isAppBundle {
             Toggle(tr("Open at login", "Запускати під час входу"), isOn: Binding(get: { prefs.launchAtLogin }, set: { prefs.launchAtLogin = $0 }))
@@ -479,6 +488,7 @@ struct SessionDetail: View {
     @Environment(SessionStore.self) private var store
     @State private var fullMessage = false
     @State private var draft = ""
+    @FocusState private var fieldFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -548,6 +558,7 @@ struct SessionDetail: View {
             if canReply || session.state == .working {
                 HStack(spacing: 8) {
                     TextField(placeholder, text: $draft)
+                        .focused($fieldFocused)
                         .textFieldStyle(.plain)
                         .font(.system(size: 13))
                         .foregroundStyle(.white)
@@ -573,6 +584,12 @@ struct SessionDetail: View {
             }
         }
         .padding(.horizontal, 10)
+        .onChange(of: store.replySeed) { _, seed in
+            guard let seed else { return }
+            store.replySeed = nil
+            draft += seed
+            fieldFocused = true
+        }
     }
 
     /// While Claude works, what you type waits for its next stop.
@@ -737,19 +754,14 @@ struct QuestionCard: View {
         }
         .disabled(!enabled)
         .opacity(enabled ? 1 : 0.55)
+        .onChange(of: store.optionPress) { _, press in
+            if let press { self.press(press.index) }
+        }
     }
 
     private func optionButton(_ question: Question, _ option: QuestionOption) -> some View {
         let isPicked = picked[question.text, default: []].contains(option.label)
-        return Button {
-            if sendsOnClick {
-                store.answer([question.text: option.label], to: session)
-            } else if question.multiSelect {
-                picked[question.text, default: []].formSymmetricDifference([option.label])
-            } else {
-                picked[question.text] = [option.label]
-            }
-        } label: {
+        return Button { choose(question, option) } label: {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(option.label).font(.system(size: 13, weight: .semibold)).foregroundStyle(.white)
@@ -767,6 +779,28 @@ struct QuestionCard: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    private func choose(_ question: Question, _ option: QuestionOption) {
+        if sendsOnClick {
+            store.answer([question.text: option.label], to: session)
+        } else if question.multiSelect {
+            picked[question.text, default: []].formSymmetricDifference([option.label])
+        } else {
+            picked[question.text] = [option.label]
+        }
+    }
+
+    /// A digit picks in the first question still without an answer; Enter sends
+    /// when every question has one.
+    private func press(_ index: Int) {
+        guard enabled else { return }
+        if index < 0 {
+            if !sendsOnClick, !questions.contains(where: { picked[$0.text, default: []].isEmpty }) { submit() }
+            return
+        }
+        let question = questions.first { picked[$0.text, default: []].isEmpty } ?? questions.last
+        if let question, question.options.indices.contains(index) { choose(question, question.options[index]) }
     }
 
     private func submit() {

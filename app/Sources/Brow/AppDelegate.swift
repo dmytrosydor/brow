@@ -44,6 +44,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var panel: NotchPanel?
     private var server: EventServer?
     private var store = SessionStore(sessions: [])
+    private var hotKey: HotKey?
+    /// The app that was in front when the hot key opened the panel.
+    private var previousApp: NSRunningApplication?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let args = CommandLine.arguments
@@ -62,6 +65,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 NSLog("brow: cannot listen on \(BrowSocket.path): \(error)")
             }
             store.startSweeping()
+            setUpKeyboard()
             if !HookInstaller.isInstalled() && !store.prefs.welcomeDone {
                 store.welcome = true
             } else if store.prefs.isAppBundle {
@@ -84,6 +88,59 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
         ) { [weak self] _ in self?.place() }
+    }
+
+    private func setUpKeyboard() {
+        let hotKey = HotKey { [weak self] in self?.hotKeyPressed() }
+        self.hotKey = hotKey
+        let register: () -> Void = { [weak self] in
+            guard let self else { return }
+            if !hotKey.register(store.prefs.hotKey) {
+                store.showToast(tr("\(store.prefs.hotKey.title) is taken by another app", "\(store.prefs.hotKey.title) вже зайнято іншою програмою"))
+                debugLog("hot key taken: \(store.prefs.hotKey.title)")
+            }
+        }
+        store.prefs.onHotKeyChange = register
+        register()
+        store.onDebugHotKey = { [weak self] in self?.hotKeyPressed() }
+        store.onClose = { [weak self] in self?.giveKeyboardBack() }
+
+        // Only while brow's own panel has the keyboard; other apps are never watched.
+        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, let panel, panel.isKeyWindow, store.expanded, let key = BrowKey(event) else { return event }
+            if panel.firstResponder is NSText, !key.worksWhileTyping { return event }
+            return store.handle(key) ? nil : event
+        }
+    }
+
+    private func hotKeyPressed() {
+        if store.expanded {
+            store.closePanel()
+            return
+        }
+        let front = NSWorkspace.shared.frontmostApplication
+        previousApp = front?.bundleIdentifier == Bundle.main.bundleIdentifier ? nil : front
+        store.openFromHotKey()
+        panel?.makeKeyAndOrderFront(nil)
+        debugLog("hot key: open, was in \(previousApp?.bundleIdentifier ?? "?"), key window \(panel?.isKeyWindow ?? false)")
+        // Soon after a close, the previous app's window can still take the keyboard back.
+        for delay in [0.15, 0.4, 0.8] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self, let panel, store.expanded, store.keyboardMode else { return }
+                if !panel.isKeyWindow { panel.makeKeyAndOrderFront(nil) }
+                debugLog("hot key: settled, key window \(panel.isKeyWindow)")
+            }
+        }
+    }
+
+    /// The panel never activates brow, so the previous app is still active:
+    /// reordering the panel hands the keyboard back to that app's window.
+    private func giveKeyboardBack() {
+        guard let panel, panel.isKeyWindow else { return }
+        panel.orderOut(nil)
+        panel.orderFrontRegardless()
+        previousApp = nil
+        debugLog("hot key: closed, key window \(panel.isKeyWindow), front \(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?")")
     }
 
     /// Puts the panel at the top centre of the notched screen (or the main one).

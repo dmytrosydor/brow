@@ -162,7 +162,7 @@ extension SessionStore {
     }
 
     /// Test hook, only with BROW_DEBUG: act as if the notch was clicked.
-    /// {"brow": "reply"|"answer"|"queue"|"age"|"allow"|"deny"|"release"|"select", "session": id, "text": …, "answers": {…}}
+    /// {"brow": "reply"|"answer"|"queue"|"age"|"key"|"hotkey"|"allow"|"deny"|"release"|"select", "session": id, "text": …, "answers": {…}}
     private func control(_ payload: [String: Any]) {
         guard ProcessInfo.processInfo.environment["BROW_DEBUG"] != nil,
               let id = payload["session"] as? String,
@@ -171,6 +171,19 @@ extension SessionStore {
         case "reply": send(payload["text"] as? String ?? "", to: session)
         case "answer": answer(payload["answers"] as? [String: String] ?? [:], to: session)
         case "queue": enqueue(payload["text"] as? String ?? "", for: session)
+        case "key":
+            switch payload["text"] as? String {
+            case "esc": _ = handle(.escape)
+            case "down": _ = handle(.down)
+            case "up": _ = handle(.up)
+            case "enter": _ = handle(.enter)
+            case "cmdenter": _ = handle(.commandEnter)
+            case "cmddelete": _ = handle(.commandDelete)
+            case let other?:
+                if let digit = Int(other) { _ = handle(.digit(digit)) } else { _ = handle(.text(other)) }
+            case nil: break
+            }
+        case "hotkey": onDebugHotKey?()
         case "age":
             if let i = sessions.firstIndex(where: { $0.id == id }) {
                 sessions[i].lastEvent = .now.addingTimeInterval(-(payload["seconds"] as? Double ?? 0))

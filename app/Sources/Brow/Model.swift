@@ -155,6 +155,14 @@ final class SessionStore {
     private let transcripts = TranscriptUsage()
     /// When each session's transcript was last read, to read at most every few seconds.
     private var usageRead: [String: Date] = [:]
+    /// Opened with the hot key: show the key hints, close after answering.
+    var keyboardMode = false
+    var optionPress: OptionPress?
+    /// A key typed outside the reply field, to put into it.
+    var replySeed: String?
+    var onClose: (() -> Void)?
+    /// Test hook: presses the hot key.
+    var onDebugHotKey: (() -> Void)?
     var peek: Peek?
     /// The first-run card is showing.
     var welcome = false
@@ -289,6 +297,7 @@ final class SessionStore {
         sessions[i].updated = .now
         showToast(note)
         selectedID = nil
+        if keyboardMode { closePanel() }
     }
 
     // MARK: Holding sessions

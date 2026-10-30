@@ -6,6 +6,8 @@
   brow-ctl.py allow <session>
   brow-ctl.py deny <session> [reason]
   brow-ctl.py select <session>
+  brow-ctl.py hotkey <session>   (any known session; presses the hot key)
+  brow-ctl.py key <session> esc|up|down|enter|cmdenter|cmddelete|<digit>|<text>
   brow-ctl.py age <session> <seconds>   (pretend the last event was that long ago)
   brow-ctl.py answer <session> '<json {question: label}>'
   brow-ctl.py release <session>
@@ -19,7 +21,7 @@ PATH = os.path.expanduser("~/Library/Application Support/brow/brow.sock")
 
 cmd, session = sys.argv[1], sys.argv[2]
 payload = {"brow": cmd, "session": session}
-if cmd in ("reply", "queue", "deny") and len(sys.argv) > 3:
+if cmd in ("reply", "queue", "deny", "key") and len(sys.argv) > 3:
     payload["text"] = sys.argv[3]
 elif cmd == "age":
     payload["seconds"] = float(sys.argv[3])

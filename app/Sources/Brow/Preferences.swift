@@ -40,7 +40,17 @@ final class Preferences {
         didSet { defaults.set(welcomeDone, forKey: "welcomeDone") }
     }
 
+    /// The system-wide combination that opens the notch.
+    var hotKey: HotKeyChoice {
+        didSet {
+            defaults.set(hotKey.rawValue, forKey: "hotKey")
+            onHotKeyChange?()
+        }
+    }
+    var onHotKeyChange: (() -> Void)?
+
     init() {
+        hotKey = (defaults.object(forKey: "hotKey") as? Int).flatMap(HotKeyChoice.init) ?? .optionSpace
         welcomeDone = defaults.bool(forKey: "welcomeDone")
         showActivityDetail = defaults.object(forKey: "showActivityDetail") as? Bool ?? true
         peekAlerts = defaults.object(forKey: "peekAlerts") as? Bool ?? true
