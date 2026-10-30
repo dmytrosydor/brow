@@ -351,7 +351,7 @@ struct SessionRow: View {
                         .foregroundStyle(Color.dim)
                         .lineLimit(1)
                     Spacer()
-                    if let tag = session.tag, session.state != .working {
+                    if let tag = session.tag, session.state != .working || !session.queued.isEmpty {
                         Text(tag)
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(Color.browAccent)
@@ -404,7 +404,7 @@ struct SessionDetail: View {
             HStack(spacing: 8) {
                 StatusDot(state: session.state, pulse: store.expanded)
                 Text(session.project).font(.system(size: 15, weight: .bold))
-                Text(session.title).font(.system(size: 13)).foregroundStyle(Color.dim)
+                Text(session.title).font(.system(size: 13)).foregroundStyle(Color.dim).lineLimit(1)
                 Spacer()
                 Label(session.client.name, systemImage: session.client.symbol)
                     .font(.system(size: 11))
@@ -428,7 +428,11 @@ struct SessionDetail: View {
                 CommandCard(session: session, command: command)
             }
 
-            if canReply {
+            if !session.queued.isEmpty {
+                QueueCard(session: session) { draft = $0 }
+            }
+
+            if canReply || session.state == .working {
                 HStack(spacing: 8) {
                     TextField(placeholder, text: $draft)
                         .textFieldStyle(.plain)
@@ -458,7 +462,11 @@ struct SessionDetail: View {
         .padding(.horizontal, 10)
     }
 
+    /// While Claude works, what you type waits for its next stop.
+    private var queues: Bool { session.state == .working && store.holds[session.id] == nil }
+
     private var placeholder: String {
+        if queues { return tr("Queue a message for when Claude stops…", "Повідомлення в чергу: Claude отримає його, коли зупиниться…") }
         if session.permission != nil { return tr("Deny and tell Claude why…", "Відхилити й пояснити Claude чому…") }
         return session.questions.isEmpty ? tr("Reply to Claude…", "Написати Claude…") : tr("Your own answer…", "Своя відповідь…")
     }
@@ -486,7 +494,50 @@ struct SessionDetail: View {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         draft = ""
-        store.send(text, to: session)
+        if queues {
+            store.enqueue(text, for: session)
+        } else {
+            store.send(text, to: session)
+        }
+    }
+}
+
+/// Messages waiting for Claude's next stop, each can be taken back or cancelled.
+struct QueueCard: View {
+    var session: Session
+    /// Puts a message back in the field for editing.
+    var edit: (String) -> Void
+    @Environment(SessionStore.self) private var store
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(tr("In the queue: Claude gets this when it stops", "У черзі: Claude отримає це, коли зупиниться"))
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Color.browAccent)
+            ForEach(Array(session.queued.enumerated()), id: \.offset) { index, text in
+                HStack(alignment: .top, spacing: 8) {
+                    Text(text)
+                        .font(.system(size: 13))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Button {
+                        store.removeQueued(at: index, from: session)
+                        edit(text)
+                    } label: {
+                        Image(systemName: "pencil").help(tr("Edit", "Змінити"))
+                    }
+                    Button {
+                        store.removeQueued(at: index, from: session)
+                    } label: {
+                        Image(systemName: "xmark").help(tr("Cancel", "Скасувати"))
+                    }
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.dim)
+                .padding(10)
+                .background(Color.faint, in: RoundedRectangle(cornerRadius: 10))
+            }
+        }
     }
 }
 

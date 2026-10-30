@@ -60,6 +60,8 @@ struct Session: Identifiable {
     var wrapUp: WrapUp?
     var questions: [Question] = []
     var permission: PermissionAsk?
+    /// Messages written while Claude works, delivered at its next stop.
+    var queued: [String] = []
     var cwd: String?
     /// TERM_PROGRAM of a terminal session, to know which app shows it.
     var termProgram: String?
@@ -68,6 +70,7 @@ struct Session: Identifiable {
     var tag: String? {
         if permission != nil { return tr("Permission", "Дозвіл") }
         if !questions.isEmpty { return tr("Question", "Питання") }
+        if !queued.isEmpty { return tr("Queued", "У черзі") }
         if wrapUp?.actions.isEmpty == false { return tr("Buttons", "Кнопки") }
         if command != nil { return tr("Command", "Команда") }
         return nil
@@ -211,6 +214,20 @@ final class SessionStore {
         replied(session, note: allow ? tr("Allowed in \(session.project)", "Дозволено в «\(session.project)»")
                                      : tr("Denied in \(session.project)", "Відхилено в «\(session.project)»"))
         showNextPermission(session.id)
+    }
+
+    // MARK: Queue
+
+    /// A message for a session that is still working; it goes out at the next stop.
+    func enqueue(_ text: String, for session: Session) {
+        guard !text.isEmpty, let i = sessions.firstIndex(where: { $0.id == session.id }) else { return }
+        sessions[i].queued.append(text)
+    }
+
+    func removeQueued(at index: Int, from session: Session) {
+        guard let i = sessions.firstIndex(where: { $0.id == session.id }),
+              sessions[i].queued.indices.contains(index) else { return }
+        sessions[i].queued.remove(at: index)
     }
 
     /// Claude sees a Stop block reason as hook feedback; say it is the user
@@ -441,6 +458,12 @@ final class SessionStore {
         case "peek":
             let session = sessions.first { $0.permission != nil }
             peek = session.map(makePeek)
+        case "queued":
+            expanded = true
+            if let i = sessions.firstIndex(where: { $0.state == .working }) {
+                sessions[i].queued = [tr("Then run the tests and commit", "Потім запусти тести й закоміть")]
+                selectedID = sessions[i].id
+            }
         case "permission":
             expanded = true
             selectedID = sessions.first { $0.permission != nil }?.id

@@ -27,6 +27,9 @@ extension SessionStore {
         if name == "SessionEnd" {
             release(id)
             forget(id)
+            if let lost = sessions.first(where: { $0.id == id }), !lost.queued.isEmpty {
+                showToast(tr("\(lost.project) ended with messages still in the queue", "«\(lost.project)» закрилась, а повідомлення лишились у черзі"))
+            }
             sessions.removeAll { $0.id == id }
             if selectedID == id { selectedID = nil }
             return
@@ -109,6 +112,17 @@ extension SessionStore {
             // A permission refused in the app ends the turn without a PostToolUse.
             release(id, only: .permission)
             session.permission = nil
+            // The queue goes out whatever is in front: the user asked for it.
+            if !session.queued.isEmpty {
+                responder.send(["decision": "block", "reason": Self.replyReason(session.queued.joined(separator: "\n\n"))])
+                debugLog("queue delivered to \(id)")
+                showToast(tr("Sent the queue to \(session.project)", "Чергу відправлено в «\(session.project)»"))
+                session.queued = []
+                session.state = .working
+                session.wrapUp = nil
+                session.command = nil
+                break
+            }
             let asks = !session.questions.isEmpty || session.wrapUp?.ask != nil
             session.state = asks ? .waiting : .done
             if mayHold && !isFrontmost(session) {
@@ -131,7 +145,7 @@ extension SessionStore {
     }
 
     /// Test hook, only with BROW_DEBUG: act as if the notch was clicked.
-    /// {"brow": "reply"|"answer"|"allow"|"deny"|"release"|"select", "session": id, "text": …, "answers": {…}}
+    /// {"brow": "reply"|"answer"|"queue"|"allow"|"deny"|"release"|"select", "session": id, "text": …, "answers": {…}}
     private func control(_ payload: [String: Any]) {
         guard ProcessInfo.processInfo.environment["BROW_DEBUG"] != nil,
               let id = payload["session"] as? String,
@@ -139,6 +153,7 @@ extension SessionStore {
         switch payload["brow"] as? String {
         case "reply": send(payload["text"] as? String ?? "", to: session)
         case "answer": answer(payload["answers"] as? [String: String] ?? [:], to: session)
+        case "queue": enqueue(payload["text"] as? String ?? "", for: session)
         case "allow": decide(allow: true, session: session)
         case "deny": decide(allow: false, message: payload["text"] as? String, session: session)
         case "release": release(id)
