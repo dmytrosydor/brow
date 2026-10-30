@@ -172,6 +172,7 @@ final class SessionStore {
     private func takeHold(_ session: Session) -> Hold? {
         guard let hold = holds.removeValue(forKey: session.id) else { return nil }
         hold.timeout?.cancel()
+        debugLog("reply from the notch to \(session.id)")
         return hold
     }
 
@@ -204,6 +205,7 @@ final class SessionStore {
         holds[id] = nil
         hold.timeout?.cancel()
         hold.responder.release()
+        debugLog("released \(id) without a reply")
         // Nothing left to answer from the notch: a plain stop is just done.
         if hold.kind == .stop, let i = sessions.firstIndex(where: { $0.id == id }),
            sessions[i].state == .waiting, sessions[i].questions.isEmpty, sessions[i].wrapUp?.ask == nil {

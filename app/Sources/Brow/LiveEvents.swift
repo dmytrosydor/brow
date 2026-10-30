@@ -19,9 +19,7 @@ extension SessionStore {
         let env = payload["env"] as? [String: String] ?? [:]
         let tool = event["tool_name"] as? String
         let input = event["tool_input"] as? [String: Any] ?? [:]
-        if ProcessInfo.processInfo.environment["BROW_DEBUG"] != nil {
-            FileHandle.standardError.write(Data("event \(name) \(tool ?? "") \(id)\n".utf8))
-        }
+        debugLog("event \(name) \(tool ?? "") \(id)")
         // Whatever is not held below is let go right away.
         var held = false
         defer { if !held { responder.release() } }
@@ -70,7 +68,12 @@ extension SessionStore {
             session.state = .working
         case ("Notification", _):
             session.state = .waiting
-            if let message = event["message"] as? String { session.lastMessage = message }
+            // Keep Claude's own last words; a notice only fills an empty card.
+            // ("needs your permission to use AskUserQuestion" comes with every question.)
+            let placeholder = session.lastMessage == Self.newSessionText || session.lastMessage == tr("Working…", "Працює…")
+            if placeholder, session.questions.isEmpty, let message = event["message"] as? String {
+                session.lastMessage = message
+            }
         case ("Stop", _):
             if let message = event["last_assistant_message"] as? String, !message.isEmpty {
                 session.lastMessage = message
