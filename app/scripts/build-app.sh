@@ -4,7 +4,7 @@
 set -eu
 
 cd "$(dirname "$0")/.."
-VERSION="${1:-0.1.0}"
+VERSION="${1:-0.2.0}"
 APP=build/brow.app
 
 swift build -c release
