@@ -19,7 +19,19 @@ final class Preferences {
         didSet { defaults.set(holdMinutes, forKey: "holdMinutes") }
     }
 
+    /// Slide the notch down for a moment when a session starts waiting.
+    var peekAlerts: Bool {
+        didSet { defaults.set(peekAlerts, forKey: "peekAlerts") }
+    }
+
+    /// Play a soft sound with that alert.
+    var peekSound: Bool {
+        didSet { defaults.set(peekSound, forKey: "peekSound") }
+    }
+
     init() {
+        peekAlerts = defaults.object(forKey: "peekAlerts") as? Bool ?? true
+        peekSound = defaults.object(forKey: "peekSound") as? Bool ?? false
         holdReplies = defaults.object(forKey: "holdReplies") as? Bool ?? true
         holdMinutes = defaults.object(forKey: "holdMinutes") as? Int ?? 10
     }

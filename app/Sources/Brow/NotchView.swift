@@ -126,11 +126,16 @@ struct NotchRoot: View {
     private let openWidth: CGFloat = 600
 
     private var open: Bool { store.expanded }
+    private var peeking: Bool { !open && store.peek != nil }
     private var size: CGSize {
-        open ? CGSize(width: openWidth, height: openHeight)
-             : CGSize(width: notch.width + 2 * wing + 16, height: notch.height)
+        if open { return CGSize(width: openWidth, height: openHeight) }
+        if peeking { return CGSize(width: max(460, notch.width + 2 * wing + 16), height: notch.height + 62) }
+        return CGSize(width: notch.width + 2 * wing + 16, height: notch.height)
     }
-    private var shape: NotchShape { NotchShape(top: open ? 14 : 8, bottom: open ? 26 : 12) }
+    private var shape: NotchShape {
+        if open { return NotchShape(top: 14, bottom: 26) }
+        return peeking ? NotchShape(top: 10, bottom: 20) : NotchShape(top: 8, bottom: 12)
+    }
 
     // One black shape that only changes size; both contents live inside it and
     // cross-fade, so nothing is rebuilt mid-animation.
@@ -143,6 +148,10 @@ struct NotchRoot: View {
                 collapsed
                     .opacity(open ? 0 : 1)
                     .animation(.easeOut(duration: open ? 0.08 : 0.2), value: open)
+                if let peek = store.peek, !open {
+                    peekContent(peek)
+                        .transition(.opacity)
+                }
                 expanded
                     .fixedSize(horizontal: false, vertical: true)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { openHeight = $0 }
@@ -160,6 +169,7 @@ struct NotchRoot: View {
         .onTapGesture { if !open { store.expanded = true } }
         .contextMenu { NotchMenu() }
         .animation(.spring(response: 0.4, dampingFraction: 0.84), value: open)
+        .animation(.spring(response: 0.38, dampingFraction: 0.8), value: store.peek)
         .animation(.spring(response: 0.32, dampingFraction: 0.9), value: openHeight)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .environment(\.colorScheme, .dark)
@@ -169,6 +179,7 @@ struct NotchRoot: View {
         collapse?.cancel()
         if inside {
             store.pinned = false
+            store.openFromPeek()
             store.expanded = true
             return
         }
@@ -179,6 +190,27 @@ struct NotchRoot: View {
         }
         collapse = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: work)
+    }
+
+    private func peekContent(_ peek: Peek) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            StatusDot(state: .waiting, size: 8)
+                .padding(.top, 4)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(peek.title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Text(peek.detail)
+                    .font(.system(size: 12, design: peek.isCommand ? .monospaced : .default))
+                    .foregroundStyle(peek.isCommand ? Color.browGreen : Color.white.opacity(0.75))
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 26)
+        .padding(.top, notch.height + 8)
+        .frame(width: size.width, alignment: .leading)
     }
 
     private var collapsed: some View {
@@ -259,6 +291,8 @@ struct NotchMenu: View {
         Picker(tr("Wait for a reply", "Чекати на відповідь"), selection: $prefs.holdMinutes) {
             ForEach([5, 10, 20, 30], id: \.self) { Text(tr("\($0) min", "\($0) хв")).tag($0) }
         }
+        Toggle(tr("Show alerts when a session waits", "Показувати сповіщення, коли сесія чекає"), isOn: $prefs.peekAlerts)
+        Toggle(tr("Alert sound", "Звук сповіщення"), isOn: $prefs.peekSound)
         Divider()
         if prefs.isAppBundle {
             Toggle(tr("Open at login", "Запускати під час входу"), isOn: Binding(get: { prefs.launchAtLogin }, set: { prefs.launchAtLogin = $0 }))

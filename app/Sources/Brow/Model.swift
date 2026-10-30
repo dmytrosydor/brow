@@ -87,6 +87,15 @@ struct Session: Identifiable {
     }
 }
 
+/// The notch sliding down for a moment to say a session is waiting.
+struct Peek: Equatable {
+    /// Which session to open on hover; nil when it sums up several.
+    var sessionID: String?
+    var title: String
+    var detail: String
+    var isCommand = false
+}
+
 /// A hook call brow is holding open so a reply from the notch can reach Claude.
 final class Hold {
     enum Kind { case stop, question, permission }
@@ -123,6 +132,11 @@ final class SessionStore {
     /// Parallel tool calls ask at once: further permissions wait here, one is
     /// shown at a time.
     var queuedPermissions: [String: [Hold]] = [:]
+    var peek: Peek?
+    /// What each session last alerted about, so one request alerts once
+    /// although several hook events report it.
+    private var peekKeys: [String: String] = [:]
+    private var peekTimeout: DispatchWorkItem?
 
     init(sessions: [Session]) {
         self.sessions = sessions
@@ -130,6 +144,11 @@ final class SessionStore {
 
     var waitingCount: Int { sessions.filter { $0.state == .waiting }.count }
     var selected: Session? { sessions.first { $0.id == selectedID } }
+
+    func forget(_ id: String) {
+        peekKeys[id] = nil
+        if peek?.sessionID == id { hidePeek() }
+    }
 
     func select(_ session: Session?) {
         selectedID = session?.id
@@ -317,6 +336,71 @@ final class SessionStore {
         return NSWorkspace.shared.frontmostApplication?.bundleIdentifier == id
     }
 
+    // MARK: Alerts
+
+    private static let peekSeconds = 4.0
+
+    /// Called after each event: alerts once when the session starts waiting for
+    /// something the user has to answer, unless they are looking at it.
+    func considerPeek(_ session: Session) {
+        let key = peekKey(session)
+        let known = peekKeys[session.id]
+        peekKeys[session.id] = key
+        guard let key else {
+            if peek?.sessionID == session.id { hidePeek() }
+            return
+        }
+        guard key != known, !expanded, prefs.peekAlerts, !isFrontmost(session) else { return }
+        show(peek: makePeek(session))
+    }
+
+    private func peekKey(_ session: Session) -> String? {
+        if let permission = session.permission { return "permission " + permission.detail }
+        if let question = session.questions.first { return "question " + question.text }
+        if session.state == .waiting, holds[session.id]?.kind == .stop { return "stop " + session.lastMessage }
+        return nil
+    }
+
+    private func makePeek(_ session: Session) -> Peek {
+        let firstLine: (String) -> String = { $0.split(whereSeparator: \.isNewline).first.map(String.init) ?? $0 }
+        if let permission = session.permission {
+            return Peek(sessionID: session.id, title: "\(session.project) \(permission.title)",
+                        detail: firstLine(permission.detail), isCommand: true)
+        }
+        if let question = session.questions.first {
+            return Peek(sessionID: session.id, title: tr("\(session.project) is asking", "\(session.project) питає"), detail: question.text)
+        }
+        return Peek(sessionID: session.id, title: tr("\(session.project) finished", "\(session.project) закінчив"),
+                    detail: firstLine(session.lastMessage))
+    }
+
+    private func show(peek new: Peek) {
+        // A second session while one is showing: sum up instead of a new slide.
+        if let peek, peek.sessionID != new.sessionID {
+            self.peek = Peek(sessionID: nil, title: tr("Sessions are waiting: \(waitingCount)", "Сесії чекають: \(waitingCount)"),
+                             detail: tr("Hover to see them", "Наведи мишку, щоб побачити"))
+        } else {
+            self.peek = new
+        }
+        debugLog("peek \(self.peek?.title ?? "")")
+        if prefs.peekSound { NSSound(named: "Tink")?.play() }
+        peekTimeout?.cancel()
+        let timeout = DispatchWorkItem { [weak self] in self?.hidePeek() }
+        peekTimeout = timeout
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.peekSeconds, execute: timeout)
+    }
+
+    func hidePeek() {
+        peekTimeout?.cancel()
+        peek = nil
+    }
+
+    /// The mouse reached the notch: turn an alert into the open panel.
+    func openFromPeek() {
+        if let id = peek?.sessionID { selectedID = id }
+        hidePeek()
+    }
+
     // MARK: Actions
 
     func runCommand(of session: Session) {
@@ -354,6 +438,9 @@ final class SessionStore {
         case "command":
             expanded = true
             selectedID = sessions.first { $0.command != nil }?.id
+        case "peek":
+            let session = sessions.first { $0.permission != nil }
+            peek = session.map(makePeek)
         case "permission":
             expanded = true
             selectedID = sessions.first { $0.permission != nil }?.id

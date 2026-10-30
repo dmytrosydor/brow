@@ -26,6 +26,7 @@ extension SessionStore {
 
         if name == "SessionEnd" {
             release(id)
+            forget(id)
             sessions.removeAll { $0.id == id }
             if selectedID == id { selectedID = nil }
             return
@@ -126,6 +127,7 @@ extension SessionStore {
             sessions.insert(session, at: 0)
         }
         sessions.sort { $0.updated > $1.updated }
+        considerPeek(session)
     }
 
     /// Test hook, only with BROW_DEBUG: act as if the notch was clicked.
