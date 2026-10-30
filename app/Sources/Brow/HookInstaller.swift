@@ -11,7 +11,7 @@ enum HookInstaller {
         ("Stop", nil),
         ("Notification", nil),
         ("SessionEnd", nil),
-        ("PreToolUse", "AskUserQuestion|mcp__ccd_turn__wrap_up"),
+        ("PreToolUse", nil),
         ("PostToolUse", nil),
         ("PostToolUseFailure", nil),
         ("PermissionRequest", nil),
@@ -64,8 +64,8 @@ enum HookInstaller {
         if isOutdated {
             confirmAndWrite(ask: true,
                 title: tr("Update brow's Claude hooks?", "Оновити хуки brow для Claude?"),
-                text: tr("This version also handles permission requests, so it needs its hook on every tool call: \(eventList).\n\nCommand: \(hookPath)\n\nA copy of \(settingsURL.path) is kept next to it.",
-                         "Ця версія вміє відповідати на запити дозволу, тому її хук потрібен на кожен виклик інструмента: \(eventList).\n\nКоманда: \(hookPath)\n\nКопія \(settingsURL.path) збережеться поруч."),
+                text: tr("This version shows what Claude is doing and handles permission requests, so it needs its hook on every tool call: \(eventList).\n\nCommand: \(hookPath)\n\nA copy of \(settingsURL.path) is kept next to it.",
+                         "Ця версія показує, що робить Claude, і відповідає на запити дозволу, тому її хук потрібен на кожен виклик інструмента: \(eventList).\n\nКоманда: \(hookPath)\n\nКопія \(settingsURL.path) збережеться поруч."),
                 button: tr("Update", "Оновити"),
                 change: addBrow)
             return

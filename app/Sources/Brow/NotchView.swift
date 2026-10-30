@@ -291,6 +291,7 @@ struct NotchMenu: View {
         Picker(tr("Wait for a reply", "Чекати на відповідь"), selection: $prefs.holdMinutes) {
             ForEach([5, 10, 20, 30], id: \.self) { Text(tr("\($0) min", "\($0) хв")).tag($0) }
         }
+        Toggle(tr("Show the text of what Claude runs", "Показувати текст команд Claude"), isOn: $prefs.showActivityDetail)
         Toggle(tr("Show alerts when a session waits", "Показувати сповіщення, коли сесія чекає"), isOn: $prefs.peekAlerts)
         Toggle(tr("Alert sound", "Звук сповіщення"), isOn: $prefs.peekSound)
         Divider()
@@ -329,6 +330,23 @@ struct SessionList: View {
     }
 }
 
+/// Time since `date`, ticking once a second. Only built while the notch is
+/// open, so a closed notch does not redraw.
+struct Elapsed: View {
+    var since: Date
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let total = max(0, Int(context.date.timeIntervalSince(since)))
+            let (h, m, s) = (total / 3600, total / 60 % 60, total % 60)
+            Text(h > 0 ? tr("\(h) h \(m) min", "\(h) год \(m) хв")
+                 : m > 0 ? tr("\(m) min \(s) s", "\(m) хв \(s) с")
+                 : tr("\(s) s", "\(s) с"))
+                .monospacedDigit()
+        }
+    }
+}
+
 struct SessionRow: View {
     var session: Session
     @Environment(SessionStore.self) private var store
@@ -359,12 +377,19 @@ struct SessionRow: View {
                             .padding(.vertical, 2)
                             .background(Color.browAccent.opacity(0.15), in: Capsule())
                     }
-                    Text(Date.now.timeIntervalSince(session.updated) < 5
-                         ? tr("just now", "щойно") : relative.localizedString(for: session.updated, relativeTo: .now))
-                        .font(.system(size: 11))
-                        .foregroundStyle(Color.dim)
+                    if store.expanded, session.state == .working, let started = session.workStarted {
+                        Elapsed(since: started)
+                            .font(.system(size: 11))
+                            .foregroundStyle(Color.dim)
+                    } else {
+                        Text(Date.now.timeIntervalSince(session.updated) < 5
+                             ? tr("just now", "щойно") : relative.localizedString(for: session.updated, relativeTo: .now))
+                            .font(.system(size: 11))
+                            .foregroundStyle(Color.dim)
+                    }
                 }
-                Text(session.permission.map { "\($0.title): \($0.detail)" } ?? session.questions.first?.text ?? session.lastMessage)
+                Text(session.permission.map { "\($0.title): \($0.detail)" } ?? session.questions.first?.text
+                     ?? session.activity.flatMap { session.state == .working ? store.prefs.text(of: $0) : nil } ?? session.lastMessage)
                     .font(.system(size: 12))
                     .foregroundStyle(Color.white.opacity(0.7))
                     .lineLimit(1)
@@ -414,6 +439,13 @@ struct SessionDetail: View {
 
             if session.lastMessage != SessionStore.newSessionText {
                 message
+            }
+
+            if session.state == .working, let activity = session.activity {
+                Label(store.prefs.text(of: activity), systemImage: "bolt.fill")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.browBlue)
+                    .lineLimit(1)
             }
 
             let canReply = store.canReply(session)

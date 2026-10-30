@@ -29,11 +29,25 @@ final class Preferences {
         didSet { defaults.set(peekSound, forKey: "peekSound") }
     }
 
+    /// Show the text of what Claude runs. Off: only the kind of action, for
+    /// when the screen is visible to others or commands may carry secrets.
+    var showActivityDetail: Bool {
+        didSet { defaults.set(showActivityDetail, forKey: "showActivityDetail") }
+    }
+
     init() {
+        showActivityDetail = defaults.object(forKey: "showActivityDetail") as? Bool ?? true
         peekAlerts = defaults.object(forKey: "peekAlerts") as? Bool ?? true
         peekSound = defaults.object(forKey: "peekSound") as? Bool ?? false
         holdReplies = defaults.object(forKey: "holdReplies") as? Bool ?? true
         holdMinutes = defaults.object(forKey: "holdMinutes") as? Int ?? 10
+    }
+
+    /// The activity as one line, with or without its text.
+    func text(of activity: Activity) -> String {
+        guard showActivityDetail, let detail = activity.detail, !detail.isEmpty else { return activity.kind }
+        let firstLine = detail.split(whereSeparator: \.isNewline).first.map(String.init) ?? detail
+        return "\(activity.kind): \(firstLine)"
     }
 
     /// Session ids (one per line) brow must never hold, e.g. a session that is

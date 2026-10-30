@@ -51,6 +51,8 @@ extension SessionStore {
             session.questions = []
             session.permission = nil
             session.command = nil
+            session.activity = nil
+            session.workStarted = .now
             if session.title.isEmpty, let prompt = event["prompt"] as? String {
                 session.title = Self.title(from: prompt)
             }
@@ -60,6 +62,12 @@ extension SessionStore {
         case ("PreToolUse", "AskUserQuestion"):
             session.questions = Self.questions(from: input)
             session.state = .waiting
+        case ("PreToolUse", let tool?):
+            // Runs before every tool call: keeps the card current, not the list order.
+            session.updated = before
+            session.activity = Self.activity(tool: tool, input: input)
+            if session.workStarted == nil { session.workStarted = .now }
+            if session.questions.isEmpty, session.permission == nil { session.state = .working }
         case ("PermissionRequest", "AskUserQuestion"):
             session.questions = Self.questions(from: input)
             session.state = .waiting
@@ -97,6 +105,8 @@ extension SessionStore {
             if event["notification_type"] as? String == "idle_prompt" {
                 release(id, only: .permission)
                 session.permission = nil
+                session.activity = nil
+                session.workStarted = nil
             }
             // Keep Claude's own last words; a notice only fills an empty card.
             // ("needs your permission to use AskUserQuestion" comes with every question.)
@@ -118,11 +128,15 @@ extension SessionStore {
                 debugLog("queue delivered to \(id)")
                 showToast(tr("Sent the queue to \(session.project)", "Чергу відправлено в «\(session.project)»"))
                 session.queued = []
+                session.activity = nil
+                session.workStarted = .now
                 session.state = .working
                 session.wrapUp = nil
                 session.command = nil
                 break
             }
+            session.activity = nil
+            session.workStarted = nil
             let asks = !session.questions.isEmpty || session.wrapUp?.ask != nil
             session.state = asks ? .waiting : .done
             if mayHold && !isFrontmost(session) {
@@ -175,6 +189,31 @@ extension SessionStore {
             cwd: cwd,
             termProgram: env["TERM_PROGRAM"]
         )
+    }
+
+    /// One line about the tool call that is starting.
+    static func activity(tool: String, input: [String: Any]) -> Activity {
+        let file = (input["file_path"] as? String ?? input["notebook_path"] as? String).map { URL(fileURLWithPath: $0).lastPathComponent }
+        switch tool {
+        case "Bash":
+            return Activity(kind: tr("Running a command", "Запускає команду"), detail: input["command"] as? String)
+        case "Read":
+            return Activity(kind: tr("Reading", "Читає"), detail: file)
+        case "Edit", "MultiEdit", "NotebookEdit":
+            return Activity(kind: tr("Editing", "Змінює"), detail: file)
+        case "Write":
+            return Activity(kind: tr("Writing", "Записує"), detail: file)
+        case "Grep", "Glob":
+            return Activity(kind: tr("Searching the code", "Шукає в коді"), detail: input["pattern"] as? String)
+        case "WebFetch":
+            return Activity(kind: tr("Opening a page", "Відкриває сторінку"), detail: input["url"] as? String)
+        case "WebSearch":
+            return Activity(kind: tr("Searching the web", "Шукає в інтернеті"), detail: input["query"] as? String)
+        case "Task", "Agent":
+            return Activity(kind: tr("Running an agent", "Запускає агента"), detail: input["description"] as? String)
+        default:
+            return Activity(kind: tr("Using \(tool)", "Використовує \(tool)"), detail: nil)
+        }
     }
 
     /// What to show on a permission card: the whole command, or the file and

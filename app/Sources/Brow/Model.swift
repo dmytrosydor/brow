@@ -36,6 +36,14 @@ struct PermissionAsk: Equatable {
     var detail: String
 }
 
+/// What Claude is doing right now.
+struct Activity: Equatable {
+    /// "Running a command"
+    var kind: String
+    /// The command, file or query. May contain secrets, so it can be hidden.
+    var detail: String?
+}
+
 /// One button of the desktop app's wrap_up box.
 struct WrapAction: Hashable {
     var label: String
@@ -62,6 +70,9 @@ struct Session: Identifiable {
     var permission: PermissionAsk?
     /// Messages written while Claude works, delivered at its next stop.
     var queued: [String] = []
+    var activity: Activity?
+    /// When the current stretch of work began; nil while Claude is not working.
+    var workStarted: Date?
     var cwd: String?
     /// TERM_PROGRAM of a terminal session, to know which app shows it.
     var termProgram: String?
@@ -258,6 +269,8 @@ final class SessionStore {
         sessions[i].state = .working
         sessions[i].questions = []
         sessions[i].permission = nil
+        sessions[i].activity = nil
+        sessions[i].workStarted = .now
         sessions[i].wrapUp = nil
         sessions[i].command = nil
         sessions[i].updated = .now
@@ -551,7 +564,9 @@ extension SessionStore {
                 client: .terminal,
                 state: .working,
                 updated: now.addingTimeInterval(-8),
-                lastMessage: tr("Running the search tests…", "Запускаю тести пошуку…")
+                lastMessage: tr("The search page is ready, now checking it.", "Сторінка пошуку готова, перевіряю її."),
+                activity: Activity(kind: tr("Running a command", "Запускає команду"), detail: "npm test -- search"),
+                workStarted: now.addingTimeInterval(-252)
             ),
         ])
         store.demo = true
