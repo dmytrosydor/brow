@@ -12,6 +12,7 @@ brow lives in the notch and shows where each Claude Code session stands: which o
 
 - **Every session at a glance.** The closed notch shows how many sessions are waiting for you; hover to see them all with their project, title, state and last message.
 - **Live activity.** A working session shows what Claude is doing right now and for how long: `Running a command: npm test · 4 min 12 s`. Hide the command text from the menu if your screen is visible to others.
+- **Keyboard first.** `⌥ Space` opens the notch from anywhere, on the session that has waited longest. Answer with a digit or by typing, and the keyboard returns to the app you were in.
 - **Context at a glance.** A small bar on each session shows how full its context is, turning orange at 70% and red at 90%, when the notch warns once. The session card adds the token counts.
 - **Alerts you can't miss.** When a session starts waiting, the notch slides down for four seconds and says who needs what. Hover to answer, or ignore it and it tucks away. An optional sound is in the menu. No alert for a session whose app is already in front.
 - **Reply from the notch.** What you type reaches Claude as your next message.
@@ -79,6 +80,20 @@ While a session is held, the Claude desktop app shows it as still running. Switc
 
 A killed terminal or a sleeping Mac tells brow nothing, so it goes by silence. A session marked as working turns gray after 30 minutes without events and comes back with its next one. Any session disappears after 6 hours without events, unless it has queued messages. Hover a row and press × to remove it yourself.
 
+## Keyboard
+
+| Key | What it does |
+|---|---|
+| `⌥ Space` | Open or close the notch; change it in the menu |
+| `↑` `↓` | Previous or next session |
+| `1`–`9` | Choose an option or a suggested button |
+| `↵` | Send a question with several answers; send what you typed |
+| `⌘↵` / `⌘⌫` | Allow or deny a permission |
+| Any other key | Start typing a reply |
+| `esc` | Close; Claude keeps waiting |
+
+On a permission card digits and plain `↵` do nothing, so a stray key cannot approve anything. brow needs no accessibility permission for this and sees keys only while its own panel has the keyboard.
+
 ## Settings
 
 Right-click the notch:
@@ -87,6 +102,7 @@ Right-click the notch:
 - **Wait for a reply** — 5, 10, 20 or 30 minutes.
 - **Show the text of what Claude runs** — off shows only the kind of action, in case commands carry secrets.
 - **Show alerts when a session waits** and **Alert sound**.
+- **Keyboard shortcut** — four combinations or off.
 - **Open at login.**
 - **Connect to / Disconnect from all Claude sessions.**
 - **Quit brow.**

@@ -2,6 +2,7 @@
 
 ## 0.2.0 — 2026-10-30
 
+- Keyboard: `⌥ Space` (changeable) opens the notch on the longest-waiting session; digits choose, `⌘↵`/`⌘⌫` allow or deny, typing starts a reply, `esc` closes and returns the keyboard.
 - Context: an estimated fill bar per session, token counts on the card, and one warning at 90%.
 - First run: the notch slides down and offers to connect, then says how to open it.
 - Old sessions: gray after 30 minutes of silence while marked as working, gone after 6 hours unless messages are queued, and removable with × on the row.

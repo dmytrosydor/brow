@@ -37,9 +37,11 @@ printf '%s' '{"session_id":"t1","hook_event_name":"Stop","cwd":"/tmp","last_assi
 python3 scripts/brow-ctl.py reply t1 "Now add tests"         # the hook prints the block decision
 ```
 
-`brow-ctl.py` also takes `queue <session> <text>`, `age <session> <seconds>`, `allow <session>`, `deny <session> [reason]`, `answer <session> '<json>'`, `release <session>` and `select <session>`. Inside a Claude session, `CLAUDE_CODE_ENTRYPOINT` is set in the shell, which makes fake events look like they come from the desktop app; unset it as above.
+`brow-ctl.py` also takes `queue <session> <text>`, `age <session> <seconds>`, `hotkey <session>`, `key <session> <name>`, `allow <session>`, `deny <session> [reason]`, `answer <session> '<json>'`, `release <session>` and `select <session>`. Inside a Claude session, `CLAUDE_CODE_ENTRYPOINT` is set in the shell, which makes fake events look like they come from the desktop app; unset it as above.
 
 To try a real session end to end, run `claude -p "…"` with brow running.
+
+`brow-ctl.py` bypasses the real keyboard, so whether the panel actually has it needs a check by hand; the `hot key:` lines in the debug log show its state.
 
 ## Screenshots and docs
 
