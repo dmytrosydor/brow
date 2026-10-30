@@ -50,7 +50,7 @@ cd brow/app
 scripts/install.sh
 ```
 
-This builds `brow.app`, copies it to `/Applications` and starts it. Then **right-click the notch → Connect to all Claude sessions…**. brow shows exactly what it will add to `~/.claude/settings.json` and keeps a copy of the old file next to it.
+This builds `brow.app`, copies it to `/Applications` and starts it. On first launch the notch slides down and offers to connect (later: **right-click the notch → Connect to all Claude sessions…**). brow shows exactly what it will add to `~/.claude/settings.json` and keeps a copy of the old file next to it.
 
 A prebuilt `brow.app` is attached to each [release](https://github.com/dmytrosydor/brow/releases). It is not notarized by Apple, so after unzipping it into `/Applications` run `xattr -dr com.apple.quarantine /Applications/brow.app` once, or macOS will refuse to open it.
 
@@ -73,6 +73,10 @@ To get a reply back to Claude, brow briefly **holds** the session:
 - A hold ends without a reply as soon as you switch to that app or type there, the session ends, it times out (10 minutes by default) or brow quits.
 
 While a session is held, the Claude desktop app shows it as still running. Switch to the app and it is let go at once.
+
+## Old sessions
+
+A killed terminal or a sleeping Mac tells brow nothing, so it goes by silence. A session marked as working turns gray after 30 minutes without events and comes back with its next one. Any session disappears after 6 hours without events, unless it has queued messages. Hover a row and press × to remove it yourself.
 
 ## Settings
 
