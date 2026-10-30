@@ -26,6 +26,14 @@ swift build -c release
 
 Add `-AppleLanguages "(en)"` or `"(uk)"` to pick the language.
 
+## Tests
+
+```bash
+cd app && swift test
+```
+
+`Tests/BrowTests` feeds in hook events in the shape Claude Code sends them and reads what `brow-hook` would print. They run on every push.
+
 ## Test without Claude
 
 Start brow with `BROW_DEBUG=1` to log received events and allow `scripts/brow-ctl.py`, which acts as if the notch was clicked. Feed `brow-hook` a hook event by hand (use `printf '%s'`, not `echo`, so `\n` in the JSON stays escaped):

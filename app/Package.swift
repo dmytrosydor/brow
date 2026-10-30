@@ -8,5 +8,6 @@ let package = Package(
         .target(name: "BrowShared", path: "Sources/BrowShared"),
         .executableTarget(name: "Brow", dependencies: ["BrowShared"], path: "Sources/Brow"),
         .executableTarget(name: "brow-hook", dependencies: ["BrowShared"], path: "Sources/brow-hook"),
+        .testTarget(name: "BrowTests", dependencies: ["Brow", "BrowShared"], path: "Tests/BrowTests"),
     ]
 )

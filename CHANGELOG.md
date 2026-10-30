@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Hooks exit quietly if brow.app has been deleted. Before, Claude reported a hook error at every stop. brow offers to update hooks from an older version.
+- Automated tests, run on every push.
+
 ## 0.2.0 — 2026-10-30
 
 - Keyboard: `⌥ Space` (changeable) opens the notch on the longest-waiting session; digits choose, `⌘↵`/`⌘⌫` allow or deny, typing starts a reply, `esc` closes and returns the keyboard.

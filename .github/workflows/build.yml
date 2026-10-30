@@ -10,6 +10,9 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+      - name: Tests
+        working-directory: app
+        run: swift test
       - name: Build brow.app
         working-directory: app
         run: scripts/build-app.sh
