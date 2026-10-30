@@ -118,7 +118,7 @@ To never hold a particular session, put its id on its own line in `~/Library/App
 
 ## Uninstall
 
-Right-click the notch → **Disconnect from all Claude sessions…**, quit brow and delete `/Applications/brow.app`. Or from the terminal:
+Right-click the notch → **Disconnect from all Claude sessions…**, quit brow and delete `/Applications/brow.app`. If you delete the app first, the hooks stay in the settings but exit quietly and do nothing. Or from the terminal:
 
 ```bash
 /Applications/brow.app/Contents/MacOS/brow --uninstall-hooks

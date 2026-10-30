@@ -46,12 +46,20 @@ enum HookInstaller {
             change: addBrow)
     }
 
-    /// The hooks are from an older brow and miss events this version needs.
-    private static var isOutdated: Bool {
+    /// The command written to the settings. If brow.app is deleted without
+    /// disconnecting, the check makes the hook exit quietly; a bare path would
+    /// make Claude report a hook error at every stop.
+    static func command(for path: String) -> String {
+        "test -x \"\(path)\" && \"\(path)\" || true"
+    }
+
+    /// The hooks are from an older brow: missing events or without the check.
+    static var isOutdated: Bool {
         let hooks = readSettings()?["hooks"] as? [String: Any] ?? [:]
         return events.contains { event in
-            !(hooks[event.name] as? [[String: Any]] ?? []).contains {
-                isBrowEntry($0) && $0["matcher"] as? String == event.matcher
+            !(hooks[event.name] as? [[String: Any]] ?? []).contains { entry in
+                isBrowEntry(entry) && entry["matcher"] as? String == event.matcher
+                    && (entry["hooks"] as? [[String: Any]] ?? []).contains { ($0["command"] as? String)?.hasPrefix("test -x ") == true }
             }
         }
     }
@@ -64,8 +72,8 @@ enum HookInstaller {
         if isOutdated {
             confirmAndWrite(ask: true,
                 title: tr("Update brow's Claude hooks?", "Оновити хуки brow для Claude?"),
-                text: tr("This version shows what Claude is doing and handles permission requests, so it needs its hook on every tool call: \(eventList).\n\nCommand: \(hookPath)\n\nA copy of \(settingsURL.path) is kept next to it.",
-                         "Ця версія показує, що робить Claude, і відповідає на запити дозволу, тому її хук потрібен на кожен виклик інструмента: \(eventList).\n\nКоманда: \(hookPath)\n\nКопія \(settingsURL.path) збережеться поруч."),
+                text: tr("This version needs its hook on every tool call, and the hook now stays quiet if brow is ever deleted: \(eventList).\n\nCommand: \(hookPath)\n\nA copy of \(settingsURL.path) is kept next to it.",
+                         "Цій версії потрібен хук на кожен виклик інструмента, а ще він тепер мовчить, якщо brow колись видалять: \(eventList).\n\nКоманда: \(hookPath)\n\nКопія \(settingsURL.path) збережеться поруч."),
                 button: tr("Update", "Оновити"),
                 change: addBrow)
             return
@@ -85,8 +93,9 @@ enum HookInstaller {
         for entries in hooks.values {
             for entry in entries as? [[String: Any]] ?? [] {
                 for hook in entry["hooks"] as? [[String: Any]] ?? [] {
-                    if let command = hook["command"] as? String, command.contains("brow-hook") {
-                        return command.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+                    if let command = hook["command"] as? String, command.contains("brow-hook"),
+                       let path = command.split(separator: "\"").first(where: { $0.hasSuffix("brow-hook") }) {
+                        return String(path)
                     }
                 }
             }
@@ -100,7 +109,7 @@ enum HookInstaller {
         for event in events {
             var entry: [String: Any] = ["hooks": [[
                 "type": "command",
-                "command": "\"\(hookPath)\"",
+                "command": command(for: hookPath),
                 "timeout": event.name == "Stop" || event.name == "PermissionRequest" ? 1900 : 5,
             ]]]
             if let matcher = event.matcher { entry["matcher"] = matcher }
