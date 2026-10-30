@@ -38,6 +38,8 @@ extension SessionStore {
         var session = sessions.first { $0.id == id } ?? newSession(id: id, event: event, env: env)
         let before = session.updated
         session.updated = .now
+        session.lastEvent = .now
+        session.stale = false
         let mayHold = prefs.holdReplies && !prefs.skippedSessions.contains(id)
 
         switch (name, tool) {
@@ -159,7 +161,7 @@ extension SessionStore {
     }
 
     /// Test hook, only with BROW_DEBUG: act as if the notch was clicked.
-    /// {"brow": "reply"|"answer"|"queue"|"allow"|"deny"|"release"|"select", "session": id, "text": …, "answers": {…}}
+    /// {"brow": "reply"|"answer"|"queue"|"age"|"allow"|"deny"|"release"|"select", "session": id, "text": …, "answers": {…}}
     private func control(_ payload: [String: Any]) {
         guard ProcessInfo.processInfo.environment["BROW_DEBUG"] != nil,
               let id = payload["session"] as? String,
@@ -168,6 +170,11 @@ extension SessionStore {
         case "reply": send(payload["text"] as? String ?? "", to: session)
         case "answer": answer(payload["answers"] as? [String: String] ?? [:], to: session)
         case "queue": enqueue(payload["text"] as? String ?? "", for: session)
+        case "age":
+            if let i = sessions.firstIndex(where: { $0.id == id }) {
+                sessions[i].lastEvent = .now.addingTimeInterval(-(payload["seconds"] as? Double ?? 0))
+            }
+            sweep()
         case "allow": decide(allow: true, session: session)
         case "deny": decide(allow: false, message: payload["text"] as? String, session: session)
         case "release": release(id)

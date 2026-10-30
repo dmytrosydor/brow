@@ -61,7 +61,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } catch {
                 NSLog("brow: cannot listen on \(BrowSocket.path): \(error)")
             }
-            if store.prefs.isAppBundle {
+            store.startSweeping()
+            if !HookInstaller.isInstalled() && !store.prefs.welcomeDone {
+                store.welcome = true
+            } else if store.prefs.isAppBundle {
                 DispatchQueue.main.async { HookInstaller.offerUpdate() }
             }
             NSWorkspace.shared.notificationCenter.addObserver(

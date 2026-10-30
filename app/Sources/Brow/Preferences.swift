@@ -35,7 +35,13 @@ final class Preferences {
         didSet { defaults.set(showActivityDetail, forKey: "showActivityDetail") }
     }
 
+    /// The first-run card was answered, so it does not come back.
+    var welcomeDone: Bool {
+        didSet { defaults.set(welcomeDone, forKey: "welcomeDone") }
+    }
+
     init() {
+        welcomeDone = defaults.bool(forKey: "welcomeDone")
         showActivityDetail = defaults.object(forKey: "showActivityDetail") as? Bool ?? true
         peekAlerts = defaults.object(forKey: "peekAlerts") as? Bool ?? true
         peekSound = defaults.object(forKey: "peekSound") as? Bool ?? false

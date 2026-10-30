@@ -73,6 +73,10 @@ struct Session: Identifiable {
     var activity: Activity?
     /// When the current stretch of work began; nil while Claude is not working.
     var workStarted: Date?
+    /// The last hook event of any kind, unlike `updated`, which orders the list.
+    var lastEvent = Date.now
+    /// Marked working, but silent for a long time: possibly closed unannounced.
+    var stale = false
     var cwd: String?
     /// TERM_PROGRAM of a terminal session, to know which app shows it.
     var termProgram: String?
@@ -147,6 +151,8 @@ final class SessionStore {
     /// shown at a time.
     var queuedPermissions: [String: [Hold]] = [:]
     var peek: Peek?
+    /// The first-run card is showing.
+    var welcome = false
     /// What each session last alerted about, so one request alerts once
     /// although several hook events report it.
     private var peekKeys: [String: String] = [:]
@@ -366,6 +372,54 @@ final class SessionStore {
         return NSWorkspace.shared.frontmostApplication?.bundleIdentifier == id
     }
 
+    // MARK: Old sessions
+
+    /// A killed terminal or a sleeping Mac sends no SessionEnd, so silence is
+    /// the only sign. Working sessions gray out first; a next event revives them.
+    private static let staleAfter: TimeInterval = 30 * 60
+    private static let removeAfter: TimeInterval = 6 * 60 * 60
+
+    func startSweeping() {
+        Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in self?.sweep() }
+    }
+
+    func sweep(now: Date = .now) {
+        for session in sessions {
+            let silent = now.timeIntervalSince(session.lastEvent)
+            // Queued messages are the user's words: keep them until sent or cancelled.
+            if silent > Self.removeAfter, session.queued.isEmpty {
+                remove(session)
+            } else if let i = sessions.firstIndex(where: { $0.id == session.id }) {
+                let stale = session.state == .working && silent > Self.staleAfter
+                if sessions[i].stale != stale { sessions[i].stale = stale }
+            }
+        }
+    }
+
+    /// Drops the session from the list. Its next event, if any, brings it back.
+    func remove(_ session: Session) {
+        release(session.id)
+        forget(session.id)
+        sessions.removeAll { $0.id == session.id }
+        if selectedID == session.id { selectedID = nil }
+    }
+
+    // MARK: First run
+
+    func connectFromWelcome() {
+        HookInstaller.install()
+        guard HookInstaller.isInstalled() else { return }
+        prefs.welcomeDone = true
+        welcome = false
+        show(peek: Peek(sessionID: nil, title: tr("brow is connected", "brow підключено"),
+                        detail: tr("Hover the notch to see your sessions", "Наведи мишку на нотч, щоб побачити сесії")))
+    }
+
+    func dismissWelcome() {
+        prefs.welcomeDone = true
+        welcome = false
+    }
+
     // MARK: Alerts
 
     private static let peekSeconds = 4.0
@@ -468,6 +522,8 @@ final class SessionStore {
         case "command":
             expanded = true
             selectedID = sessions.first { $0.command != nil }?.id
+        case "welcome":
+            welcome = true
         case "peek":
             let session = sessions.first { $0.permission != nil }
             peek = session.map(makePeek)

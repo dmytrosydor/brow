@@ -6,6 +6,7 @@
   brow-ctl.py allow <session>
   brow-ctl.py deny <session> [reason]
   brow-ctl.py select <session>
+  brow-ctl.py age <session> <seconds>   (pretend the last event was that long ago)
   brow-ctl.py answer <session> '<json {question: label}>'
   brow-ctl.py release <session>
 """
@@ -20,6 +21,8 @@ cmd, session = sys.argv[1], sys.argv[2]
 payload = {"brow": cmd, "session": session}
 if cmd in ("reply", "queue", "deny") and len(sys.argv) > 3:
     payload["text"] = sys.argv[3]
+elif cmd == "age":
+    payload["seconds"] = float(sys.argv[3])
 elif cmd == "answer":
     payload["answers"] = json.loads(sys.argv[3])
 
