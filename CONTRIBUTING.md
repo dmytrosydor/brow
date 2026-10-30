@@ -21,7 +21,7 @@ cd app
 swift build -c release
 .build/release/Brow --open          # live, starts expanded
 .build/release/Brow --demo          # demo data, nothing is sent
-.build/release/Brow --state question  # a demo screen: collapsed|peek|list|question|permission|command|buttons|sent
+.build/release/Brow --state question  # a demo screen: collapsed|peek|list|question|permission|queued|command|buttons|sent
 ```
 
 Add `-AppleLanguages "(en)"` or `"(uk)"` to pick the language.
@@ -37,7 +37,7 @@ printf '%s' '{"session_id":"t1","hook_event_name":"Stop","cwd":"/tmp","last_assi
 python3 scripts/brow-ctl.py reply t1 "Now add tests"         # the hook prints the block decision
 ```
 
-`brow-ctl.py` also takes `answer <session> '<json>'`, `release <session>` and `select <session>`. Inside a Claude session, `CLAUDE_CODE_ENTRYPOINT` is set in the shell, which makes fake events look like they come from the desktop app; unset it as above.
+`brow-ctl.py` also takes `queue <session> <text>`, `allow <session>`, `deny <session> [reason]`, `answer <session> '<json>'`, `release <session>` and `select <session>`. Inside a Claude session, `CLAUDE_CODE_ENTRYPOINT` is set in the shell, which makes fake events look like they come from the desktop app; unset it as above.
 
 To try a real session end to end, run `claude -p "…"` with brow running.
 

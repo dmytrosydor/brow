@@ -13,6 +13,7 @@ brow lives in the notch and shows where each Claude Code session stands: which o
 - **Every session at a glance.** The closed notch shows how many sessions are waiting for you; hover to see them all with their project, title, state and last message.
 - **Alerts you can't miss.** When a session starts waiting, the notch slides down for four seconds and says who needs what. Hover to answer, or ignore it and it tucks away. An optional sound is in the menu. No alert for a session whose app is already in front.
 - **Reply from the notch.** What you type reaches Claude as your next message.
+- **Queue the next step.** While Claude works, write what it should do next. It gets the message the moment it stops, so you can line up work across sessions and walk away.
 - **Permissions from the notch.** When Claude asks to run a command or change a file, see exactly what it wants and press Allow or Deny, or type why not. Nothing is ever approved on its own.
 - **Buttons and questions.** The buttons at the end of a reply in the desktop app, and multiple-choice questions (one or several, multi-select or your own answer), work from the notch.
 - **Run suggested commands.** A shell block in Claude's message gets a button that opens it in a new [Ghostty](https://ghostty.org) window, in the session's folder. Nothing runs until you click.
@@ -28,6 +29,10 @@ brow lives in the notch and shows where each Claude Code session stands: which o
 | Buttons | Command |
 |---|---|
 | ![Suggested buttons](docs/img/en/buttons.png) | ![A suggested command](docs/img/en/command.png) |
+
+| Queue |
+|---|
+| ![A message queued for the next stop](docs/img/en/queued.png) |
 
 ## Requirements
 
@@ -61,6 +66,7 @@ brow adds one small command, `brow-hook`, to Claude Code's [hooks](https://docs.
 To get a reply back to Claude, brow briefly **holds** the session:
 
 - When Claude stops and that session's window is not in front, the `Stop` hook waits. Your reply is returned as `{"decision": "block", "reason": …}`, which Claude reads as your next message.
+- A queued message is returned the same way at the next `Stop`, whichever app is in front.
 - A multiple-choice question is answered through `PermissionRequest` with `updatedInput.answers`. The app shows its own dialog meanwhile; whichever answers first wins.
 - A permission request is answered the same way, with `behavior: allow` or `deny`. Your app or terminal shows its usual prompt meanwhile, and the first answer wins.
 - A hold ends without a reply as soon as you switch to that app or type there, the session ends, it times out (10 minutes by default) or brow quits.
@@ -101,6 +107,7 @@ Right-click the notch → **Disconnect from all Claude sessions…**, quit brow 
 - Typing in the desktop app while brow holds that session has not been tested much; brow lets the session go as soon as the app comes to the front.
 - After a reply from the notch, the desktop app may still draw the old buttons under the message.
 - Refusing a permission in the app or terminal sends brow no event, so its card stays until Claude reports the session idle, about a minute later. Pressing a button on it in that minute does nothing.
+- The queue lives in memory: quitting brow loses it. A permission prompt or question does not use it, Claude waits for your answer first.
 - Clicking **Open** brings the right app forward, but not the exact session.
 - Sessions that were already running when brow started appear after their next event.
 

@@ -2,6 +2,7 @@
 
 ## 0.2.0 — 2026-10-30
 
+- Queue: while Claude works, messages typed in the notch wait and go out together at its next stop. They can be edited or cancelled until then.
 - Alerts: the notch slides down for four seconds when a session starts waiting, once per request, and sums up when several wait. Hover to open that session. Sound is optional. No alert when the session's app is in front.
 - Permissions from the notch: a card shows the whole command or change, with Allow, Deny, or a typed reason for denying. Several requests at once are shown one by one.
 - The hooks now also cover every `PostToolUse`, `PostToolUseFailure` and `PermissionRequest`. brow offers to update hooks from an older version.
