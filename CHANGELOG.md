@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.1 — 2026-10-30
+
+- A session held for a reply shows an orange "waiting" dot instead of a green one.
+- Claude is told that a reply from the notch is the user's message; before, it could read it as output of the hook.
+- The "needs your permission to use AskUserQuestion" notice no longer replaces the last message.
+- `BROW_DEBUG` logs carry the time and say whether a hold ended with a reply from the notch or without one.
+
 ## 0.1.0 — 2026-10-30
 
 First version.
