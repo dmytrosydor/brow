@@ -330,7 +330,7 @@ struct SessionRow: View {
                         .font(.system(size: 11))
                         .foregroundStyle(Color.dim)
                 }
-                Text(session.questions.first?.text ?? session.lastMessage)
+                Text(session.permission.map { "\($0.title): \($0.detail)" } ?? session.questions.first?.text ?? session.lastMessage)
                     .font(.system(size: 12))
                     .foregroundStyle(Color.white.opacity(0.7))
                     .lineLimit(1)
@@ -383,18 +383,20 @@ struct SessionDetail: View {
             }
 
             let canReply = store.canReply(session)
-            if !session.questions.isEmpty {
+            if let permission = session.permission {
+                PermissionCard(session: session, permission: permission, enabled: canReply)
+            } else if !session.questions.isEmpty {
                 QuestionCard(session: session, questions: session.questions, enabled: canReply)
             } else if let wrapUp = session.wrapUp, canReply {
                 WrapUpCard(session: session, wrapUp: wrapUp)
             }
-            if let command = session.command {
+            if let command = session.command, session.permission == nil {
                 CommandCard(session: session, command: command)
             }
 
             if canReply {
                 HStack(spacing: 8) {
-                    TextField(session.questions.isEmpty ? tr("Reply to Claude…", "Написати Claude…") : tr("Your own answer…", "Своя відповідь…"), text: $draft)
+                    TextField(placeholder, text: $draft)
                         .textFieldStyle(.plain)
                         .font(.system(size: 13))
                         .foregroundStyle(.white)
@@ -422,6 +424,11 @@ struct SessionDetail: View {
         .padding(.horizontal, 10)
     }
 
+    private var placeholder: String {
+        if session.permission != nil { return tr("Deny and tell Claude why…", "Відхилити й пояснити Claude чому…") }
+        return session.questions.isEmpty ? tr("Reply to Claude…", "Написати Claude…") : tr("Your own answer…", "Своя відповідь…")
+    }
+
     private var message: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(session.lastMessage)
@@ -446,6 +453,43 @@ struct SessionDetail: View {
         guard !text.isEmpty else { return }
         draft = ""
         store.send(text, to: session)
+    }
+}
+
+/// A tool call waiting for permission: the whole command or change, then the
+/// two choices. Long input scrolls, it is never cut off.
+struct PermissionCard: View {
+    var session: Session
+    var permission: PermissionAsk
+    var enabled: Bool
+    @Environment(SessionStore.self) private var store
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("\(session.project) \(permission.title)")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white)
+            ScrollView {
+                Text(permission.detail)
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(Color.browGreen)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(10)
+            }
+            .frame(maxHeight: 180)
+            .fixedSize(horizontal: false, vertical: true)
+            .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
+            if enabled {
+                HStack(spacing: 8) {
+                    Button(tr("Allow", "Дозволити")) { store.decide(allow: true, session: session) }
+                        .buttonStyle(PillButton(primary: true))
+                    Button(tr("Deny", "Відхилити")) { store.decide(allow: false, session: session) }
+                        .buttonStyle(PillButton())
+                }
+            }
+        }
     }
 }
 

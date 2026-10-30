@@ -12,8 +12,9 @@ enum HookInstaller {
         ("Notification", nil),
         ("SessionEnd", nil),
         ("PreToolUse", "AskUserQuestion|mcp__ccd_turn__wrap_up"),
-        ("PostToolUse", "AskUserQuestion"),
-        ("PermissionRequest", "AskUserQuestion"),
+        ("PostToolUse", nil),
+        ("PostToolUseFailure", nil),
+        ("PermissionRequest", nil),
     ]
 
     static var settingsURL: URL {
@@ -45,11 +46,31 @@ enum HookInstaller {
             change: addBrow)
     }
 
-    /// The hooks point at another brow-hook: one that is gone (brow.app was
-    /// moved), or any other while this copy runs from /Applications. Offer to
-    /// point them here.
-    static func offerPathUpdate() {
-        guard let installed = installedHookPath(), installed != hookPath,
+    /// The hooks are from an older brow and miss events this version needs.
+    private static var isOutdated: Bool {
+        let hooks = readSettings()?["hooks"] as? [String: Any] ?? [:]
+        return events.contains { event in
+            !(hooks[event.name] as? [[String: Any]] ?? []).contains {
+                isBrowEntry($0) && $0["matcher"] as? String == event.matcher
+            }
+        }
+    }
+
+    /// Offers to rewrite the hooks when they are from an older brow, or point at
+    /// another brow-hook: one that is gone (brow.app was moved), or any other
+    /// while this copy runs from /Applications.
+    static func offerUpdate() {
+        guard let installed = installedHookPath() else { return }
+        if isOutdated {
+            confirmAndWrite(ask: true,
+                title: tr("Update brow's Claude hooks?", "Оновити хуки brow для Claude?"),
+                text: tr("This version also handles permission requests, so it needs its hook on every tool call: \(eventList).\n\nCommand: \(hookPath)\n\nA copy of \(settingsURL.path) is kept next to it.",
+                         "Ця версія вміє відповідати на запити дозволу, тому її хук потрібен на кожен виклик інструмента: \(eventList).\n\nКоманда: \(hookPath)\n\nКопія \(settingsURL.path) збережеться поруч."),
+                button: tr("Update", "Оновити"),
+                change: addBrow)
+            return
+        }
+        guard installed != hookPath,
               !FileManager.default.fileExists(atPath: installed) || hookPath.hasPrefix("/Applications/") else { return }
         confirmAndWrite(ask: true,
             title: tr("brow was moved", "brow перемістили"),

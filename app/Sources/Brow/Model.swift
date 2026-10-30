@@ -27,6 +27,15 @@ struct Question: Hashable {
     var multiSelect = false
 }
 
+/// A tool call waiting for the user's permission, as PermissionRequest sees it.
+struct PermissionAsk: Equatable {
+    var tool: String
+    /// "wants to run a command", shown after the project name.
+    var title: String
+    /// The whole command, file or input, so the user sees what they approve.
+    var detail: String
+}
+
 /// One button of the desktop app's wrap_up box.
 struct WrapAction: Hashable {
     var label: String
@@ -50,12 +59,14 @@ struct Session: Identifiable {
     var command: String?
     var wrapUp: WrapUp?
     var questions: [Question] = []
+    var permission: PermissionAsk?
     var cwd: String?
     /// TERM_PROGRAM of a terminal session, to know which app shows it.
     var termProgram: String?
 
     /// What the notch can do for this session, shown as a tag in the list.
     var tag: String? {
+        if permission != nil { return tr("Permission", "Дозвіл") }
         if !questions.isEmpty { return tr("Question", "Питання") }
         if wrapUp?.actions.isEmpty == false { return tr("Buttons", "Кнопки") }
         if command != nil { return tr("Command", "Команда") }
@@ -78,18 +89,21 @@ struct Session: Identifiable {
 
 /// A hook call brow is holding open so a reply from the notch can reach Claude.
 final class Hold {
-    enum Kind { case stop, question }
+    enum Kind { case stop, question, permission }
 
     let kind: Kind
     let responder: Responder
-    /// AskUserQuestion's tool_input, sent back with the answers.
+    /// The tool's input: AskUserQuestion's goes back with the answers, a
+    /// permission's tells which tool call a later PostToolUse settles.
     let toolInput: [String: Any]
+    let permission: PermissionAsk?
     var timeout: DispatchWorkItem?
 
-    init(kind: Kind, responder: Responder, toolInput: [String: Any] = [:]) {
+    init(kind: Kind, responder: Responder, toolInput: [String: Any] = [:], permission: PermissionAsk? = nil) {
         self.kind = kind
         self.responder = responder
         self.toolInput = toolInput
+        self.permission = permission
     }
 }
 
@@ -106,6 +120,9 @@ final class SessionStore {
     var demo = false
     let prefs = Preferences()
     var holds: [String: Hold] = [:]
+    /// Parallel tool calls ask at once: further permissions wait here, one is
+    /// shown at a time.
+    var queuedPermissions: [String: [Hold]] = [:]
 
     init(sessions: [Session]) {
         self.sessions = sessions
@@ -127,6 +144,10 @@ final class SessionStore {
     /// Free text or a wrap_up button: becomes the user's next message (for a
     /// question: the answer to every question).
     func send(_ text: String, to session: Session) {
+        if session.permission != nil, holds[session.id]?.kind == .permission {
+            decide(allow: false, message: text, session: session)
+            return
+        }
         if let hold = takeHold(session) {
             switch hold.kind {
             case .stop:
@@ -134,6 +155,8 @@ final class SessionStore {
             case .question:
                 let answers = session.questions.reduce(into: [String: String]()) { $0[$1.text] = text }
                 hold.responder.send(Self.answerOutput(hold.toolInput, answers))
+            case .permission:
+                break
             }
         } else if !demo {
             showToast(tr("\(session.project) is no longer waiting for a reply", "«\(session.project)» вже не чекає відповіді"))
@@ -151,6 +174,24 @@ final class SessionStore {
             return
         }
         replied(session, note: tr("Answered \(session.project): ", "Відповідь у «\(session.project)»: ") + answers.values.joined(separator: "; "))
+    }
+
+    /// Allows or denies the tool call on the card. A denial's message reaches
+    /// Claude, which carries on with it.
+    func decide(allow: Bool, message: String? = nil, session: Session) {
+        if let hold = takeHold(session) {
+            var decision: [String: Any] = ["behavior": allow ? "allow" : "deny"]
+            if !allow {
+                decision["message"] = message ?? "The user denied this from brow, the notch app that shows this session."
+            }
+            hold.responder.send(["hookSpecificOutput": ["hookEventName": "PermissionRequest", "decision": decision]])
+        } else if !demo {
+            showToast(tr("\(session.project) is no longer waiting for a reply", "«\(session.project)» вже не чекає відповіді"))
+            return
+        }
+        replied(session, note: allow ? tr("Allowed in \(session.project)", "Дозволено в «\(session.project)»")
+                                     : tr("Denied in \(session.project)", "Відхилено в «\(session.project)»"))
+        showNextPermission(session.id)
     }
 
     /// Claude sees a Stop block reason as hook feedback; say it is the user
@@ -180,6 +221,7 @@ final class SessionStore {
         guard let i = sessions.firstIndex(where: { $0.id == session.id }) else { return }
         sessions[i].state = .working
         sessions[i].questions = []
+        sessions[i].permission = nil
         sessions[i].wrapUp = nil
         sessions[i].command = nil
         sessions[i].updated = .now
@@ -190,8 +232,23 @@ final class SessionStore {
     // MARK: Holding sessions
 
     func hold(_ kind: Hold.Kind, session id: String, responder: Responder, toolInput: [String: Any] = [:]) {
+        place(Hold(kind: kind, responder: responder, toolInput: toolInput), session: id)
+    }
+
+    /// Holds a permission request. Returns false if another one is on the card
+    /// and this one has to wait its turn.
+    func holdPermission(_ ask: PermissionAsk, session id: String, responder: Responder, toolInput: [String: Any]) -> Bool {
+        let hold = Hold(kind: .permission, responder: responder, toolInput: toolInput, permission: ask)
+        if holds[id]?.kind == .permission {
+            queuedPermissions[id, default: []].append(hold)
+            return false
+        }
+        place(hold, session: id)
+        return true
+    }
+
+    private func place(_ hold: Hold, session id: String) {
         release(id)
-        let hold = Hold(kind: kind, responder: responder, toolInput: toolInput)
         let timeout = DispatchWorkItem { [weak self] in self?.release(id) }
         hold.timeout = timeout
         holds[id] = hold
@@ -206,10 +263,40 @@ final class SessionStore {
         hold.timeout?.cancel()
         hold.responder.release()
         debugLog("released \(id) without a reply")
+        for queued in queuedPermissions.removeValue(forKey: id) ?? [] { queued.responder.release() }
         // Nothing left to answer from the notch: a plain stop is just done.
         if hold.kind == .stop, let i = sessions.firstIndex(where: { $0.id == id }),
            sessions[i].state == .waiting, sessions[i].questions.isEmpty, sessions[i].wrapUp?.ask == nil {
             sessions[i].state = .done
+        }
+    }
+
+    /// A tool ran, so its permission was settled in the app or terminal. Lets
+    /// that hook go and shows the next permission, if any.
+    func settlePermission(_ id: String, tool: String, input: [String: Any]) {
+        func matches(_ hold: Hold) -> Bool {
+            hold.permission?.tool == tool && NSDictionary(dictionary: hold.toolInput).isEqual(to: input)
+        }
+        if let hold = holds[id], hold.kind == .permission, matches(hold) {
+            holds[id] = nil
+            hold.timeout?.cancel()
+            hold.responder.release()
+            showNextPermission(id)
+        } else if let i = queuedPermissions[id]?.firstIndex(where: matches) {
+            queuedPermissions[id]?.remove(at: i).responder.release()
+        }
+    }
+
+    private func showNextPermission(_ id: String) {
+        guard let next = queuedPermissions[id]?.first else { return }
+        queuedPermissions[id]?.removeFirst()
+        if queuedPermissions[id]?.isEmpty == true { queuedPermissions[id] = nil }
+        let rest = queuedPermissions.removeValue(forKey: id)
+        place(next, session: id)
+        queuedPermissions[id] = rest
+        if let i = sessions.firstIndex(where: { $0.id == id }) {
+            sessions[i].permission = next.permission
+            sessions[i].state = .waiting
         }
     }
 
@@ -267,6 +354,9 @@ final class SessionStore {
         case "command":
             expanded = true
             selectedID = sessions.first { $0.command != nil }?.id
+        case "permission":
+            expanded = true
+            selectedID = sessions.first { $0.permission != nil }?.id
         case "buttons":
             expanded = true
             selectedID = sessions.first { $0.wrapUp?.actions.isEmpty == false }?.id
@@ -333,6 +423,17 @@ extension SessionStore {
                 lastMessage: tr("Changes are committed locally. Run the command below to push them.",
                                 "Зміни закомічені локально. Щоб відправити на GitHub, запусти команду нижче."),
                 command: "git push origin main"
+            ),
+            Session(
+                project: "mobile-app",
+                title: tr("Clean rebuild", "Чиста перебудова"),
+                client: .terminal,
+                state: .waiting,
+                updated: now.addingTimeInterval(-90),
+                lastMessage: tr("The stale build cache is the cause. I'll remove it and rebuild.",
+                                "Причина в застарілому кеші збірки. Приберу його й перезберу."),
+                permission: PermissionAsk(tool: "Bash", title: tr("wants to run a command", "хоче запустити команду"),
+                                          detail: "rm -rf build && npm run build")
             ),
             Session(
                 project: "website",

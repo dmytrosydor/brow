@@ -32,6 +32,7 @@ extension SessionStore {
         }
 
         var session = sessions.first { $0.id == id } ?? newSession(id: id, event: event, env: env)
+        let before = session.updated
         session.updated = .now
         let mayHold = prefs.holdReplies && !prefs.skippedSessions.contains(id)
 
@@ -44,6 +45,7 @@ extension SessionStore {
             session.state = .working
             session.wrapUp = nil
             session.questions = []
+            session.permission = nil
             session.command = nil
             if session.title.isEmpty, let prompt = event["prompt"] as? String {
                 session.title = Self.title(from: prompt)
@@ -61,13 +63,37 @@ extension SessionStore {
                 hold(.question, session: id, responder: responder, toolInput: input)
                 held = true
             }
+        case ("PermissionRequest", let tool?):
+            let ask = Self.permissionAsk(tool: tool, input: input)
+            session.state = .waiting
+            if mayHold {
+                held = true
+                if holdPermission(ask, session: id, responder: responder, toolInput: input) { session.permission = ask }
+            } else {
+                session.permission = ask
+            }
         case ("PostToolUse", "AskUserQuestion"):
             // Answered in the app, or by us: drop the question from the notch.
             release(id, only: .question)
             session.questions = []
             session.state = .working
+        case ("PostToolUse", let tool?), ("PostToolUseFailure", let tool?):
+            // Every tool call ends here. It says the session is busy, and may
+            // settle a permission given in the app. It should not reorder the list.
+            session.updated = before
+            settlePermission(id, tool: tool, input: input)
+            session.permission = holds[id]?.permission
+            if session.questions.isEmpty {
+                session.state = session.permission == nil ? .working : .waiting
+            }
         case ("Notification", _):
             session.state = .waiting
+            // Refusing a permission in the app or terminal sends no event; the
+            // session just goes idle at the prompt, which is announced after a minute.
+            if event["notification_type"] as? String == "idle_prompt" {
+                release(id, only: .permission)
+                session.permission = nil
+            }
             // Keep Claude's own last words; a notice only fills an empty card.
             // ("needs your permission to use AskUserQuestion" comes with every question.)
             let placeholder = session.lastMessage == Self.newSessionText || session.lastMessage == tr("Working…", "Працює…")
@@ -79,6 +105,9 @@ extension SessionStore {
                 session.lastMessage = message
                 session.command = Self.command(in: message)
             }
+            // A permission refused in the app ends the turn without a PostToolUse.
+            release(id, only: .permission)
+            session.permission = nil
             let asks = !session.questions.isEmpty || session.wrapUp?.ask != nil
             session.state = asks ? .waiting : .done
             if mayHold && !isFrontmost(session) {
@@ -100,7 +129,7 @@ extension SessionStore {
     }
 
     /// Test hook, only with BROW_DEBUG: act as if the notch was clicked.
-    /// {"brow": "reply"|"answer"|"release"|"select", "session": id, "text": …, "answers": {…}}
+    /// {"brow": "reply"|"answer"|"allow"|"deny"|"release"|"select", "session": id, "text": …, "answers": {…}}
     private func control(_ payload: [String: Any]) {
         guard ProcessInfo.processInfo.environment["BROW_DEBUG"] != nil,
               let id = payload["session"] as? String,
@@ -108,6 +137,8 @@ extension SessionStore {
         switch payload["brow"] as? String {
         case "reply": send(payload["text"] as? String ?? "", to: session)
         case "answer": answer(payload["answers"] as? [String: String] ?? [:], to: session)
+        case "allow": decide(allow: true, session: session)
+        case "deny": decide(allow: false, message: payload["text"] as? String, session: session)
         case "release": release(id)
         case "select": selectedID = id
         default: break
@@ -127,6 +158,32 @@ extension SessionStore {
             cwd: cwd,
             termProgram: env["TERM_PROGRAM"]
         )
+    }
+
+    /// What to show on a permission card: the whole command, or the file and
+    /// the change, or the raw input for any other tool.
+    static func permissionAsk(tool: String, input: [String: Any]) -> PermissionAsk {
+        let path = input["file_path"] as? String ?? input["notebook_path"] as? String ?? ""
+        switch tool {
+        case "Bash":
+            return PermissionAsk(tool: tool, title: tr("wants to run a command", "хоче запустити команду"),
+                                 detail: input["command"] as? String ?? "")
+        case "Edit":
+            let change = "- \(input["old_string"] as? String ?? "")\n+ \(input["new_string"] as? String ?? "")"
+            return PermissionAsk(tool: tool, title: tr("wants to edit a file", "хоче змінити файл"), detail: "\(path)\n\n\(change)")
+        case "Write":
+            return PermissionAsk(tool: tool, title: tr("wants to write a file", "хоче записати файл"),
+                                 detail: "\(path)\n\n\(input["content"] as? String ?? "")")
+        case "Read":
+            return PermissionAsk(tool: tool, title: tr("wants to read a file", "хоче прочитати файл"), detail: path)
+        case "WebFetch":
+            return PermissionAsk(tool: tool, title: tr("wants to open a page", "хоче відкрити сторінку"),
+                                 detail: input["url"] as? String ?? "")
+        default:
+            let data = try? JSONSerialization.data(withJSONObject: input, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
+            return PermissionAsk(tool: tool, title: tr("wants to use \(tool)", "хоче використати \(tool)"),
+                                 detail: data.flatMap { String(data: $0, encoding: .utf8) } ?? "")
+        }
     }
 
     static let newSessionText = tr("New session", "Нова сесія")
