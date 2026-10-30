@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0 — 2026-10-30
+
+- Permissions from the notch: a card shows the whole command or change, with Allow, Deny, or a typed reason for denying. Several requests at once are shown one by one.
+- The hooks now also cover every `PostToolUse`, `PostToolUseFailure` and `PermissionRequest`. brow offers to update hooks from an older version.
+- A session is marked as working again after each tool call.
+
 ## 0.1.1 — 2026-10-30
 
 - A session held for a reply shows an orange "waiting" dot instead of a green one.
