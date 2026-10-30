@@ -2,6 +2,7 @@
 
 ## 0.2.0 — 2026-10-30
 
+- Context: an estimated fill bar per session, token counts on the card, and one warning at 90%.
 - First run: the notch slides down and offers to connect, then says how to open it.
 - Old sessions: gray after 30 minutes of silence while marked as working, gone after 6 hours unless messages are queued, and removable with × on the row.
 - Messages are formatted (bold, code, lists, headings) and long ones scroll, so the buttons and the reply field stay in reach. Previews show plain text.

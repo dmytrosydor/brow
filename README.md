@@ -12,6 +12,7 @@ brow lives in the notch and shows where each Claude Code session stands: which o
 
 - **Every session at a glance.** The closed notch shows how many sessions are waiting for you; hover to see them all with their project, title, state and last message.
 - **Live activity.** A working session shows what Claude is doing right now and for how long: `Running a command: npm test · 4 min 12 s`. Hide the command text from the menu if your screen is visible to others.
+- **Context at a glance.** A small bar on each session shows how full its context is, turning orange at 70% and red at 90%, when the notch warns once. The session card adds the token counts.
 - **Alerts you can't miss.** When a session starts waiting, the notch slides down for four seconds and says who needs what. Hover to answer, or ignore it and it tucks away. An optional sound is in the menu. No alert for a session whose app is already in front.
 - **Reply from the notch.** What you type reaches Claude as your next message.
 - **Queue the next step.** While Claude works, write what it should do next. It gets the message the moment it stops, so you can line up work across sessions and walk away.
@@ -94,7 +95,7 @@ To never hold a particular session, put its id on its own line in `~/Library/App
 
 ## Privacy and safety
 
-- Everything stays on your Mac. brow makes no network requests.
+- Everything stays on your Mac. brow makes no network requests. It reads session transcripts only for token counts.
 - The socket is readable only by your user.
 - Commands run only when you press the button, in a new terminal window where you can see them.
 - `brow-hook` never blocks Claude when brow is not running: it exits immediately and prints nothing.
@@ -113,6 +114,7 @@ Right-click the notch → **Disconnect from all Claude sessions…**, quit brow 
 - Typing in the desktop app while brow holds that session has not been tested much; brow lets the session go as soon as the app comes to the front.
 - After a reply from the notch, the desktop app may still draw the old buttons under the message.
 - Refusing a permission in the app or terminal sends brow no event, so its card stays until Claude reports the session idle, about a minute later. Pressing a button on it in that minute does nothing.
+- The context bar is an estimate. Hooks and transcripts do not state the window size, so brow assumes 1M for an explicit `[1m]`, for Opus and past 200K, and 200K otherwise. On a plan where Opus has 200K it reads low. It also relies on Claude Code's transcript format; if that changes, the bar just disappears.
 - The queue lives in memory: quitting brow loses it. A permission prompt or question does not use it, Claude waits for your answer first.
 - Clicking **Open** brings the right app forward, but not the exact session.
 - Sessions that were already running when brow started appear after their next event.
