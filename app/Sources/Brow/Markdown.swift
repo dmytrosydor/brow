@@ -87,7 +87,7 @@ struct MarkdownText: View {
             }
         }
         .font(.system(size: 13))
-        .foregroundStyle(Color.white.opacity(0.9))
+        .foregroundStyle(Color.bright)
         .textSelection(.enabled)
     }
 
@@ -99,8 +99,8 @@ struct MarkdownText: View {
                 .fixedSize(horizontal: false, vertical: true)
         case .heading(let s):
             Text(MarkdownBlock.inline(s))
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(.white)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color.bright)
                 .fixedSize(horizontal: false, vertical: true)
         case .bullet(let s):
             item("•", s)
@@ -109,20 +109,19 @@ struct MarkdownText: View {
         case .code(let s):
             Text(s)
                 .font(.system(size: 12, design: .monospaced))
-                .foregroundStyle(Color.browGreen)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(8)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+                .background(Color.faint, in: RoundedRectangle(cornerRadius: 4))
         case .rule:
             Rectangle()
-                .fill(Color.white.opacity(0.15))
+                .fill(Color.raised)
                 .frame(height: 1)
         }
     }
 
     private func item(_ mark: String, _ text: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(mark).foregroundStyle(Color.dim)
             Text(MarkdownBlock.inline(text))
                 .fixedSize(horizontal: false, vertical: true)

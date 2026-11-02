@@ -5,8 +5,30 @@ extension Color {
     static let browAccent = Color(red: 0.85, green: 0.47, blue: 0.34)
     static let browGreen = Color(red: 0.36, green: 0.82, blue: 0.53)
     static let browBlue = Color(red: 0.40, green: 0.63, blue: 1.0)
-    static let dim = Color.white.opacity(0.55)
+    // Three text roles on the black notch: primary, secondary, muted.
+    static let bright = Color.white.opacity(0.92)
+    static let soft = Color.white.opacity(0.68)
+    static let dim = Color.white.opacity(0.5)
+    // Two surface steps: cards and fields, then hover, picked and buttons.
     static let faint = Color.white.opacity(0.07)
+    static let raised = Color.white.opacity(0.12)
+}
+
+/// A key as it looks on the keyboard. Shown only while the notch has the
+/// keyboard, so every keycap on screen works.
+struct Keycap: View {
+    var key: String
+    /// On the accent button: dark ink instead of light.
+    var onAccent = false
+
+    var body: some View {
+        Text(key)
+            .font(.system(size: 11, weight: .medium, design: .rounded))
+            .foregroundStyle(onAccent ? Color.black.opacity(0.7) : Color.soft)
+            .padding(.horizontal, 4)
+            .frame(minWidth: 16, minHeight: 16)
+            .background(onAccent ? Color.black.opacity(0.12) : Color.raised, in: RoundedRectangle(cornerRadius: 4))
+    }
 }
 
 /// Black shape that grows out of the notch: concave "ears" at the top edge,
@@ -75,7 +97,6 @@ struct StatusDot: View {
         let dot = Circle()
             .fill(color)
             .frame(width: size, height: size)
-            .background(Circle().fill(color.opacity(0.35)).frame(width: size * 2, height: size * 2).blur(radius: 3))
         if pulse && state == .working && !stale {
             dot.phaseAnimator([false, true]) { dot, faded in
                 dot.opacity(faded ? 0.3 : 1)
@@ -86,36 +107,52 @@ struct StatusDot: View {
     }
 }
 
-struct PillButton: ButtonStyle {
+struct NotchButton: ButtonStyle {
     var primary = false
+    /// The key that does the same, shown next to the label in keyboard mode.
+    var key: String?
 
     func makeBody(configuration: Configuration) -> some View {
-        Pill(configuration: configuration, primary: primary)
+        Face(configuration: configuration, primary: primary, key: key)
     }
 
-    private struct Pill: View {
+    private struct Face: View {
         let configuration: Configuration
         let primary: Bool
+        let key: String?
         @Environment(\.isEnabled) private var isEnabled
+        @Environment(SessionStore.self) private var store
 
         var body: some View {
-            configuration.label
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(primary ? Color.black : Color.white)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(primary ? Color.browAccent : Color.white.opacity(0.12), in: Capsule())
-                .opacity(!isEnabled ? 0.4 : configuration.isPressed ? 0.7 : 1)
+            HStack(spacing: 8) {
+                configuration.label
+                if let key, store.keyboardMode {
+                    Keycap(key: key, onAccent: primary)
+                }
+            }
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(primary ? Color.black : Color.bright)
+            .padding(.horizontal, 12)
+            .frame(height: 28)
+            .background(primary ? Color.browAccent : Color.raised, in: RoundedRectangle(cornerRadius: 8))
+            .opacity(!isEnabled ? 0.4 : 1)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
         }
     }
 }
 
-private let relative: RelativeDateTimeFormatter = {
-    let f = RelativeDateTimeFormatter()
-    f.locale = isUkrainian ? Locale(identifier: "uk_UA") : Locale(identifier: "en_US")
-    f.unitsStyle = .short
-    return f
-}()
+/// "40 s ago", "5 min ago": the same units as the working timer.
+private func ago(_ date: Date) -> String {
+    let s = max(0, Int(Date.now.timeIntervalSince(date)))
+    switch s {
+    case ..<5: return tr("just now", "щойно")
+    case ..<60: return tr("\(s) s ago", "\(s) с тому")
+    case ..<3600: return tr("\(s / 60) min ago", "\(s / 60) хв тому")
+    case ..<86400: return tr("\(s / 3600) h ago", "\(s / 3600) год тому")
+    default: return tr("\(s / 86400) d ago", "\(s / 86400) дн тому")
+    }
+}
 
 struct NotchRoot: View {
     let notch: NotchGeometry
@@ -177,8 +214,8 @@ struct NotchRoot: View {
         .onTapGesture { if !open { store.expanded = true } }
         .contextMenu { NotchMenu() }
         .animation(.spring(response: 0.4, dampingFraction: 0.84), value: open)
-        .animation(.spring(response: 0.38, dampingFraction: 0.8), value: store.peek)
-        .animation(.spring(response: 0.38, dampingFraction: 0.8), value: store.welcome)
+        .animation(.spring(response: 0.38, dampingFraction: 0.9), value: store.peek)
+        .animation(.spring(response: 0.38, dampingFraction: 0.9), value: store.welcome)
         .animation(.spring(response: 0.32, dampingFraction: 0.9), value: openHeight)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .environment(\.colorScheme, .dark)
@@ -202,42 +239,42 @@ struct NotchRoot: View {
 
     private var welcomeContent: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(tr("Hi! This is brow.", "Привіт! Це brow."))
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(.white)
-            Text(tr("Connect it to see your Claude sessions here.", "Підключи його, щоб бачити тут свої сесії Claude."))
+            Text(tr("This is brow", "Це brow"))
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Color.bright)
+            Text(tr("Connect it to see your Claude sessions here", "Підключи його, щоб бачити тут свої сесії Claude"))
                 .font(.system(size: 12))
-                .foregroundStyle(Color.white.opacity(0.75))
+                .foregroundStyle(Color.soft)
             HStack(spacing: 8) {
                 Button(tr("Connect", "Підключити")) { store.connectFromWelcome() }
-                    .buttonStyle(PillButton(primary: true))
+                    .buttonStyle(NotchButton(primary: true))
                 Button(tr("Later", "Пізніше")) { store.dismissWelcome() }
-                    .buttonStyle(PillButton())
+                    .buttonStyle(NotchButton())
             }
             .padding(.top, 8)
         }
-        .padding(.horizontal, 26)
+        .padding(.horizontal, 24)
         .padding(.top, notch.height + 8)
         .frame(width: size.width, alignment: .leading)
     }
 
     private func peekContent(_ peek: Peek) -> some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: 12) {
             StatusDot(state: .waiting, size: 8)
                 .padding(.top, 4)
             VStack(alignment: .leading, spacing: 4) {
                 Text(peek.title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color.bright)
                     .lineLimit(1)
                 Text(peek.detail)
                     .font(.system(size: 12, design: peek.isCommand ? .monospaced : .default))
-                    .foregroundStyle(peek.isCommand ? Color.browGreen : Color.white.opacity(0.75))
+                    .foregroundStyle(Color.soft)
                     .lineLimit(1)
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 26)
+        .padding(.horizontal, 24)
         .padding(.top, notch.height + 8)
         .frame(width: size.width, alignment: .leading)
     }
@@ -247,14 +284,15 @@ struct NotchRoot: View {
             BrowGlyph(size: 15)
                 .frame(width: wing)
             Color.clear.frame(width: notch.width)
-            HStack(spacing: 5) {
+            HStack(spacing: 4) {
                 if store.waitingCount > 0 {
-                    StatusDot(state: .waiting, size: 7)
+                    StatusDot(state: .waiting, size: 8)
                     Text("\(store.waitingCount)")
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white)
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(Color.bright)
                 } else if !store.sessions.isEmpty {
-                    StatusDot(state: store.sessions.contains { $0.state == .working && !$0.stale } ? .working : .done, size: 7)
+                    StatusDot(state: store.sessions.contains { $0.state == .working && !$0.stale } ? .working : .done, size: 8)
                 }
             }
             .frame(width: wing)
@@ -267,14 +305,15 @@ struct NotchRoot: View {
             HStack(spacing: 8) {
                 BrowGlyph(size: 16)
                 Text("brow")
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Color.bright)
                 Spacer(minLength: notch.width)
-                Text(store.waitingCount == 0 ? tr("all quiet", "усе спокійно") : tr("waiting: \(store.waitingCount)", "чекають: \(store.waitingCount)"))
+                Text(store.waitingCount == 0 ? tr("all quiet", "усе спокійно") : tr("\(store.waitingCount) waiting", "чекають: \(store.waitingCount)"))
                     .font(.system(size: 12, weight: .medium))
+                    .monospacedDigit()
                     .foregroundStyle(store.waitingCount == 0 ? Color.dim : Color.browAccent)
             }
-            .padding(.horizontal, 10)
+            .padding(.horizontal, 8)
             .frame(height: notch.height)
 
             Group {
@@ -290,32 +329,47 @@ struct NotchRoot: View {
             .padding(.top, 8)
 
             if store.keyboardMode {
-                Text(tr("↑↓ sessions · 1–9 choose · ⌘↵ allow · ⌘⌫ deny · type to reply · esc close",
-                        "↑↓ сесії · 1–9 вибір · ⌘↵ дозволити · ⌘⌫ відхилити · пиши, щоб відповісти · esc закрити"))
-                    .font(.system(size: 10))
-                    .foregroundStyle(Color.dim)
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 10)
+                HStack(spacing: 12) {
+                    hint("↑↓", tr("sessions", "сесії"))
+                    hint("1–9", tr("choose", "вибір"))
+                    hint("⌘↵", tr("allow", "дозволити"))
+                    hint("⌘⌫", tr("deny", "відхилити"))
+                    hint("esc", tr("close", "закрити"))
+                    Text(tr("type to reply", "пиши відповідь"))
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.dim)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.top, 12)
             }
 
             if let toast = store.toast {
                 HStack(spacing: 8) {
                     Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.browGreen)
-                    Text(toast).lineLimit(1).foregroundStyle(.white)
+                    Text(toast).lineLimit(1).foregroundStyle(Color.bright)
                 }
                 .font(.system(size: 12, weight: .medium))
                 .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Color.faint, in: Capsule())
+                .frame(height: 32)
+                .background(Color.faint, in: RoundedRectangle(cornerRadius: 8))
                 .frame(maxWidth: .infinity)
-                .padding(.top, 10)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .padding(.top, 12)
+                .transition(.opacity)
             }
         }
         .padding(.bottom, 16)
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 16)
         .frame(width: openWidth)
         .animation(.easeOut(duration: 0.2), value: store.toast)
+    }
+
+    private func hint(_ key: String, _ action: String) -> some View {
+        HStack(spacing: 4) {
+            Keycap(key: key)
+            Text(action)
+        }
+        .font(.system(size: 11))
+        .foregroundStyle(Color.dim)
     }
 }
 
@@ -361,7 +415,7 @@ struct SessionList: View {
                     .font(.system(size: 12))
                     .foregroundStyle(Color.dim)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 18)
+                    .padding(.vertical, 16)
             }
             ForEach(store.sessions) { session in
                 SessionRow(session: session)
@@ -380,15 +434,15 @@ struct ContextBar: View {
     }
 
     var body: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 4) {
             Capsule()
-                .fill(Color.white.opacity(0.12))
+                .fill(Color.raised)
                 .frame(width: 36, height: 4)
                 .overlay(alignment: .leading) {
                     Capsule().fill(color).frame(width: max(4, 36 * usage.fraction), height: 4)
                 }
             Text("≈\(usage.percent)%")
-                .font(.system(size: 10, weight: .medium))
+                .font(.system(size: 11))
                 .monospacedDigit()
                 .foregroundStyle(usage.fraction >= 0.7 ? color : Color.dim)
         }
@@ -421,14 +475,14 @@ struct SessionRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             StatusDot(state: session.state, pulse: store.expanded, stale: session.stale)
-                .padding(.top, 5)
+                .padding(.top, 4)
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
+                HStack(spacing: 8) {
                     Text(session.project)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Color.bright)
                     Image(systemName: session.client.symbol)
-                        .font(.system(size: 10))
+                        .font(.system(size: 11))
                         .foregroundStyle(Color.dim)
                     Text(session.title)
                         .font(.system(size: 12))
@@ -440,28 +494,23 @@ struct SessionRow: View {
                     }
                     if let tag = session.tag, session.state != .working || !session.queued.isEmpty {
                         Text(tag)
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(Color.browAccent)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 2)
-                            .background(Color.browAccent.opacity(0.15), in: Capsule())
+                            .font(.system(size: 11))
+                            .foregroundStyle(Color.soft)
                     }
-                    if session.stale {
-                        Text(tr("No news for a while", "Давно без новин"))
-                            .font(.system(size: 11))
-                            .foregroundStyle(Color.dim)
-                    } else if store.expanded, session.state == .working, let started = session.workStarted {
-                        Elapsed(since: started)
-                            .font(.system(size: 11))
-                            .foregroundStyle(Color.dim)
-                    } else {
-                        Text(Date.now.timeIntervalSince(session.updated) < 5
-                             ? tr("just now", "щойно") : relative.localizedString(for: session.updated, relativeTo: .now))
-                            .font(.system(size: 11))
-                            .foregroundStyle(Color.dim)
+                    Group {
+                        if session.stale {
+                            Text(tr("No news for a while", "Давно без новин"))
+                        } else if store.expanded, session.state == .working, let started = session.workStarted {
+                            Elapsed(since: started)
+                        } else {
+                            Text(ago(session.updated))
+                        }
                     }
+                    .font(.system(size: 11))
+                    .monospacedDigit()
+                    .foregroundStyle(Color.dim)
                     Button { store.remove(session) } label: {
-                        Image(systemName: "xmark").font(.system(size: 10, weight: .semibold))
+                        Image(systemName: "xmark").font(.system(size: 11))
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(Color.dim)
@@ -471,13 +520,13 @@ struct SessionRow: View {
                 Text(session.permission.map { "\($0.title): \($0.detail)" } ?? session.questions.first?.text
                      ?? session.activity.flatMap { session.state == .working ? store.prefs.text(of: $0) : nil } ?? MarkdownBlock.plain(session.lastMessage))
                     .font(.system(size: 12))
-                    .foregroundStyle(Color.white.opacity(0.7))
+                    .foregroundStyle(Color.soft)
                     .lineLimit(1)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(hovered ? Color.faint : Color.clear, in: RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal, 8)
+        .padding(.vertical, 8)
+        .background(hovered ? Color.faint : Color.clear, in: RoundedRectangle(cornerRadius: 10))
         .contentShape(Rectangle())
         .onHover { hovered = $0 }
     }
@@ -509,14 +558,13 @@ struct SessionDetail: View {
 
             HStack(spacing: 8) {
                 StatusDot(state: session.state, pulse: store.expanded, stale: session.stale)
-                Text(session.project).font(.system(size: 15, weight: .bold))
+                Text(session.project).font(.system(size: 15, weight: .medium)).foregroundStyle(Color.bright)
                 Text(session.title).font(.system(size: 13)).foregroundStyle(Color.dim).lineLimit(1)
                 Spacer()
                 Label(session.client.name, systemImage: session.client.symbol)
                     .font(.system(size: 11))
                     .foregroundStyle(Color.dim)
             }
-            .foregroundStyle(.white)
 
             if let usage = session.usage {
                 HStack(spacing: 8) {
@@ -524,6 +572,7 @@ struct SessionDetail: View {
                     Text(tr("\(ContextUsage.short(usage.used)) of ≈\(ContextUsage.short(usage.window)) · Claude wrote \(ContextUsage.short(usage.written)) tokens",
                             "\(ContextUsage.short(usage.used)) з ≈\(ContextUsage.short(usage.window)) · Claude написав \(ContextUsage.short(usage.written)) токенів"))
                         .font(.system(size: 11))
+                        .monospacedDigit()
                         .foregroundStyle(Color.dim)
                 }
             }
@@ -533,10 +582,13 @@ struct SessionDetail: View {
             }
 
             if session.state == .working, let activity = session.activity {
-                Label(store.prefs.text(of: activity), systemImage: "bolt.fill")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color.browBlue)
-                    .lineLimit(1)
+                Label {
+                    Text(store.prefs.text(of: activity)).foregroundStyle(Color.soft)
+                } icon: {
+                    Image(systemName: "bolt.fill").foregroundStyle(Color.browBlue)
+                }
+                .font(.system(size: 12))
+                .lineLimit(1)
             }
 
             let canReply = store.canReply(session)
@@ -561,18 +613,19 @@ struct SessionDetail: View {
                         .focused($fieldFocused)
                         .textFieldStyle(.plain)
                         .font(.system(size: 13))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.bright)
                         .onSubmit(send)
                     Button(action: send) {
                         Image(systemName: "arrow.up.circle.fill")
-                            .font(.system(size: 20))
-                            .foregroundStyle(draft.isEmpty ? Color.dim : Color.browAccent)
+                            .font(.system(size: 18))
+                            .foregroundStyle(draft.isEmpty ? Color.dim : Color.bright)
                     }
                     .buttonStyle(.plain)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Color.faint, in: RoundedRectangle(cornerRadius: 12))
+                .padding(.leading, 12)
+                .padding(.trailing, 8)
+                .frame(height: 40)
+                .background(Color.faint, in: RoundedRectangle(cornerRadius: 10))
             } else if session.state != .working {
                 Text(session.client == .desktop
                      ? tr("This session is not waiting for a reply from the notch. Reply in the Claude app.",
@@ -583,7 +636,7 @@ struct SessionDetail: View {
                     .foregroundStyle(Color.dim)
             }
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 8)
         .onChange(of: store.replySeed) { _, seed in
             guard let seed else { return }
             store.replySeed = nil
@@ -614,20 +667,20 @@ struct SessionDetail: View {
             } else {
                 Text(MarkdownBlock.plain(session.lastMessage))
                     .font(.system(size: 13))
-                    .foregroundStyle(Color.white.opacity(0.9))
+                    .foregroundStyle(Color.bright)
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if session.lastMessage.count > 140 || session.lastMessage.contains("\n") {
                 Button(fullMessage ? tr("Show less", "Згорнути") : tr("Show more", "Розгорнути")) { fullMessage.toggle() }
                     .buttonStyle(.plain)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Color.browAccent)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.soft)
             }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.faint, in: RoundedRectangle(cornerRadius: 12))
+        .background(Color.faint, in: RoundedRectangle(cornerRadius: 10))
     }
 
     private func send() {
@@ -650,15 +703,15 @@ struct QueueCard: View {
     @Environment(SessionStore.self) private var store
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(tr("In the queue: Claude gets this when it stops", "У черзі: Claude отримає це, коли зупиниться"))
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Color.browAccent)
+        VStack(alignment: .leading, spacing: 8) {
+            Text(tr("Queued: Claude gets this when it stops", "У черзі: Claude отримає це, коли зупиниться"))
+                .font(.system(size: 12))
+                .foregroundStyle(Color.dim)
             ForEach(Array(session.queued.enumerated()), id: \.offset) { index, text in
                 HStack(alignment: .top, spacing: 8) {
                     Text(text)
                         .font(.system(size: 13))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.bright)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     Button {
                         store.removeQueued(at: index, from: session)
@@ -673,8 +726,9 @@ struct QueueCard: View {
                     }
                 }
                 .buttonStyle(.plain)
+                .font(.system(size: 12))
                 .foregroundStyle(Color.dim)
-                .padding(10)
+                .padding(12)
                 .background(Color.faint, in: RoundedRectangle(cornerRadius: 10))
             }
         }
@@ -692,26 +746,26 @@ struct PermissionCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("\(session.project) \(permission.title)")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Color.bright)
             ScrollView {
                 Text(permission.detail)
                     .font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(Color.browGreen)
+                    .foregroundStyle(Color.bright)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(10)
+                    .padding(12)
             }
             .frame(maxHeight: 180)
             .fixedSize(horizontal: false, vertical: true)
-            .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
+            .background(Color.faint, in: RoundedRectangle(cornerRadius: 10))
             if enabled {
                 HStack(spacing: 8) {
                     Button(tr("Allow", "Дозволити")) { store.decide(allow: true, session: session) }
-                        .buttonStyle(PillButton(primary: true))
+                        .buttonStyle(NotchButton(primary: true, key: "⌘↵"))
                     Button(tr("Deny", "Відхилити")) { store.decide(allow: false, session: session) }
-                        .buttonStyle(PillButton())
+                        .buttonStyle(NotchButton(key: "⌘⌫"))
                 }
             }
         }
@@ -733,22 +787,22 @@ struct QuestionCard: View {
         VStack(alignment: .leading, spacing: 12) {
             ForEach(questions, id: \.self) { question in
                 VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 6) {
-                        Text(question.header.uppercased())
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(Color.browAccent)
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(question.header)
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color.dim)
                         Text(question.text)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.white)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Color.bright)
                     }
-                    ForEach(question.options, id: \.self) { option in
-                        optionButton(question, option)
+                    ForEach(Array(question.options.enumerated()), id: \.element) { index, option in
+                        optionButton(question, option, index: index)
                     }
                 }
             }
             if enabled && !sendsOnClick {
                 Button(tr("Send", "Відправити")) { submit() }
-                    .buttonStyle(PillButton(primary: true))
+                    .buttonStyle(NotchButton(primary: true, key: "↵"))
                     .disabled(questions.contains { picked[$0.text, default: []].isEmpty })
             }
         }
@@ -759,23 +813,27 @@ struct QuestionCard: View {
         }
     }
 
-    private func optionButton(_ question: Question, _ option: QuestionOption) -> some View {
+    private func optionButton(_ question: Question, _ option: QuestionOption, index: Int) -> some View {
         let isPicked = picked[question.text, default: []].contains(option.label)
         return Button { choose(question, option) } label: {
-            HStack {
+            HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(option.label).font(.system(size: 13, weight: .semibold)).foregroundStyle(.white)
+                    Text(option.label).font(.system(size: 13, weight: .medium)).foregroundStyle(Color.bright)
                     if !option.detail.isEmpty {
-                        Text(option.detail).font(.system(size: 11)).foregroundStyle(Color.dim)
+                        Text(option.detail).font(.system(size: 12)).foregroundStyle(Color.dim)
                     }
                 }
                 Spacer()
+                // Digits pick the option in the first question still unanswered.
+                if store.keyboardMode, question == questions.first(where: { picked[$0.text, default: []].isEmpty }) ?? questions.last, index < 9 {
+                    Keycap(key: "\(index + 1)")
+                }
                 Image(systemName: sendsOnClick ? "chevron.right" : (isPicked ? "checkmark.circle.fill" : "circle"))
                     .font(.system(size: 12))
                     .foregroundStyle(isPicked ? Color.browAccent : Color.dim)
             }
-            .padding(10)
-            .background(Color.white.opacity(isPicked ? 0.16 : 0.09), in: RoundedRectangle(cornerRadius: 10))
+            .padding(12)
+            .background(isPicked ? Color.raised : Color.faint, in: RoundedRectangle(cornerRadius: 10))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -820,12 +878,12 @@ struct WrapUpCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if let ask = wrapUp.ask {
-                Text(ask).font(.system(size: 13, weight: .semibold)).foregroundStyle(.white)
+                Text(ask).font(.system(size: 13, weight: .medium)).foregroundStyle(Color.bright)
             }
             HStack(spacing: 8) {
                 ForEach(Array(wrapUp.actions.enumerated()), id: \.element) { index, action in
                     Button(action.label) { store.send(action.message, to: session) }
-                        .buttonStyle(PillButton(primary: index == 0))
+                        .buttonStyle(NotchButton(primary: index == 0, key: index < 9 ? "\(index + 1)" : nil))
                 }
             }
         }
@@ -839,18 +897,17 @@ struct CommandCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("$ " + command)
+            (Text("$ ").foregroundStyle(Color.dim) + Text(command).foregroundStyle(Color.bright))
                 .font(.system(size: 12, design: .monospaced))
-                .foregroundStyle(Color.browGreen)
                 .textSelection(.enabled)
-                .padding(10)
+                .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
+                .background(Color.faint, in: RoundedRectangle(cornerRadius: 10))
             HStack(spacing: 8) {
                 Button { store.runCommand(of: session) } label: {
                     Label(tr("Run in Ghostty", "Запустити в Ghostty"), systemImage: "play.fill")
                 }
-                .buttonStyle(PillButton(primary: true))
+                .buttonStyle(NotchButton(primary: true))
                 Button {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(command, forType: .string)
@@ -858,7 +915,7 @@ struct CommandCard: View {
                 } label: {
                     Label(tr("Copy", "Копіювати"), systemImage: "doc.on.doc")
                 }
-                .buttonStyle(PillButton())
+                .buttonStyle(NotchButton())
             }
         }
     }

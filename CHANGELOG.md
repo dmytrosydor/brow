@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Quieter look: no glow around status dots, tags as plain text, fewer weights and sizes, one gray for each text role, orange only for what waits and for the main button.
+- Keyboard mode shows keycaps: digits on options and suggested buttons, `⌘↵`/`⌘⌫` on Allow and Deny, `↵` on Send, and the hint line as keys.
+- Commands are shown in plain text instead of green.
+- Times read the same everywhere: `40 s ago`, `5 min ago`, `4 min 13 s`.
+
 ## 0.2.1 — 2026-10-30
 
 - Hooks exit quietly if brow.app has been deleted. Before, Claude reported a hook error at every stop. brow offers to update hooks from an older version.

@@ -560,6 +560,7 @@ final class SessionStore {
             expanded = true
         case "question":
             expanded = true
+            keyboardMode = true
             selectedID = sessions.first { !$0.questions.isEmpty }?.id
         case "command":
             expanded = true
@@ -577,9 +578,11 @@ final class SessionStore {
             }
         case "permission":
             expanded = true
+            keyboardMode = true
             selectedID = sessions.first { $0.permission != nil }?.id
         case "buttons":
             expanded = true
+            keyboardMode = true
             selectedID = sessions.first { $0.wrapUp?.actions.isEmpty == false }?.id
         case "sent":
             expanded = true
