@@ -17,6 +17,31 @@ final class MarkdownTests: XCTestCase {
     }
 }
 
+final class TitleTests: XCTestCase {
+    func testPlainPromptGivesItsFirstLine() {
+        XCTAssertEqual(SessionStore.title(from: "Fix the login bug\nand add a test"), "Fix the login bug")
+    }
+
+    func testRemindersAreSkipped() {
+        let prompt = "<system-reminder>\nCodebase instructions\n</system-reminder>\nAdd dark mode"
+        XCTAssertEqual(SessionStore.title(from: prompt), "Add dark mode")
+    }
+
+    func testOnlyAReminderHasNoTitle() {
+        XCTAssertEqual(SessionStore.title(from: "<system-reminder>\nhi\n</system-reminder>"), "")
+    }
+
+    func testShellAndSlashCommandsKeepTheirText() {
+        XCTAssertEqual(SessionStore.title(from: "<bash-input>git status</bash-input>"), "$ git status")
+        XCTAssertEqual(SessionStore.title(from: "<command-message>unslop</command-message>\n<command-name>/unslop</command-name>\n<command-args>brow</command-args>"),
+                       "/unslop brow")
+    }
+
+    func testUserHTMLStays() {
+        XCTAssertEqual(SessionStore.title(from: "Center the <div>logo</div>"), "Center the <div>logo</div>")
+    }
+}
+
 final class TranscriptUsageTests: XCTestCase {
     private var url: URL!
 

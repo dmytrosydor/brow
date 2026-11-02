@@ -265,9 +265,30 @@ extension SessionStore {
 
     static let newSessionText = tr("New session", "Нова сесія")
 
+    /// First line of what the user wrote; empty when the prompt holds nothing
+    /// of theirs, so the next prompt names the session instead.
     static func title(from prompt: String) -> String {
-        let line = prompt.split(whereSeparator: \.isNewline).first.map(String.init) ?? prompt
+        let line = readable(prompt).split(whereSeparator: \.isNewline).first
+            .map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
         return line.count > 60 ? String(line.prefix(60)) + "…" : line
+    }
+
+    /// The prompt without the tagged blocks Claude Code adds to it (reminders,
+    /// command output). A slash command and a shell command typed with `!`
+    /// keep their text.
+    static func readable(_ prompt: String) -> String {
+        func inner(_ tag: String) -> String? {
+            guard let open = prompt.range(of: "<\(tag)>"),
+                  let close = prompt.range(of: "</\(tag)>", range: open.upperBound..<prompt.endIndex) else { return nil }
+            return prompt[open.upperBound..<close.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if let command = inner("command-name") {
+            return [command, inner("command-args") ?? ""].filter { !$0.isEmpty }.joined(separator: " ")
+        }
+        if let shell = inner("bash-input") { return "$ " + shell }
+        // Only tags with a hyphen: Claude Code's own, not HTML the user typed.
+        return prompt.replacingOccurrences(of: "<([a-z]+(?:-[a-z]+)+)(?:\\s[^>]*)?>[\\s\\S]*?</\\1>", with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     static func wrapUp(from input: [String: Any]) -> WrapUp {

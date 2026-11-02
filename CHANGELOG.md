@@ -6,6 +6,7 @@
 - Keyboard mode shows keycaps: digits on options and suggested buttons, `⌘↵`/`⌘⌫` on Allow and Deny, `↵` on Send, and the hint line as keys.
 - Commands are shown in plain text instead of green.
 - Times read the same everywhere: `40 s ago`, `5 min ago`, `4 min 13 s`.
+- A session is named after what you wrote, not after the notes Claude Code adds to the first message. A `!` shell command or a slash command keeps its text.
 
 ## 0.2.1 — 2026-10-30
 
